@@ -1,0 +1,259 @@
+---
+title: "ITEC 621 - Homework 3 - Machine Learning, Model Selection & Regularization"
+author: "Shawn Newman"
+date: "February 20, 2019"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r include=T}
+library(car)
+library(GGally)
+library(lmtest)
+library(MASS)
+library(lm.beta)
+library(boot)
+library(ISLR)
+library(perturb)
+library(leaps)
+library(stats)
+library(glmnet)
+library(pls)
+data("Salaries")
+data("College")
+```
+
+**1.1 Using the same Salaries{car} data set, load and attach the data set (i.e., attach(Salaries)) into your work environment.** This item shows a histogram for the response variable: salary.
+
+```{r}
+attach(Salaries)
+```
+
+**1.2 Enter set.seed(15) so that you get the same results if you run your cross validation commands multiple times. Then create an index vector called "train" which you can use to split the data set into 80% train and 20% test subsets.** 
+
+```{r}
+set.seed(15)
+train=sample(1:nrow(Salaries),0.8*nrow(Salaries))
+```
+
+1.3 **1.3 Fit a linear model to predict salary using all remaining variables as predictors, using the train data subset. Store your resulting model in an object named fit.train and display the summary results.**
+```{r}
+fit.train<-lm(salary~.,Salaries,subset = train)
+summary(fit.train)
+```
+
+1.4 **1.4 Using the fit.train model, compute the MSE for the full data set and for the train and test subsets. Store the results in objects named full.mse, train.mse and test.mse, respectively. Then, use the c() function to display these three results with their respective labels "Full MSE", "Train MSE" and "Test MSE"** 
+```{r}
+full.mse<-mean((Salaries$salary-predict(fit.train,Salaries))^2)
+train.mse<-mean((Salaries$salary-predict(fit.train,Salaries))[train]^2)
+test.mse<-mean((Salaries$salary-predict(fit.train,Salaries))[-train]^2)
+sal.f.t.mse<-c("Full MSE"=full.mse,"Train MSE"=train.mse,"Test MSE"=test.mse)
+sal.lm.mse<-c("Full MSE"=mean((Salaries$salary-predict(fit.train,Salaries))^2),"Train MSE"=mean((Salaries$salary-predict(fit.train,Salaries))[train]^2),"Test MSE"=mean((Salaries$salary-predict(fit.train,Salaries))[-train]^2))
+sal.f.t.mse
+sal.lm.mse
+```
+
+1.5 **1.5 Analyze the difference between these MSE values and briefly comment on your conclusions. Is this what you expected? Why or why not?** The training MSE is the lowest becaus ethat is the data the model was trained on. The full dataset is next lowest because 80% of the data is the same as what was in the training model. The Test MSE is highest because those data points were not included in the training set.
+
+2.1 **2.1 Using the Salaries{car} data set, fit a GLM model to predict salary using all predictors. Display the summary results. Store the results in an object named glm.fit. Tip: when you use the glm() function you need to specify the family and the link function. However, if you don't specify a family, the gaussian family (i.e., normal distribution) and the "identity" link (i.e., no transformation of the response variable) will be used as defaults. So just use the glm() function exactly how you use the lm() function and the result will be an OLS model?**
+```{r}
+sal.glm.fit<-glm(salary~.,data=Salaries)
+summary(sal.glm.fit)
+```
+
+2.3 **2.3 Using the cv.glm(){boot} function and the glm.fit object above, compute and display the LOOCV MSE (Leave One Out) for this model (stored in the first attribute of the "delta" attribute. Technical note: since glm() and lm() can both fit OLS models, some times it is convenient to use one or the other because other useful libraries and functions need either glm or lm objects specifically; this is one of these cases - the cv.glm() function only works with glm() objects. However, if you are interested in R-Squares and F-Statistics you and run the same model with lm() and you should get the same results.**
+```{r}
+sal.glm.cv<-cv.glm(Salaries,sal.glm.fit)
+sal.glm.cv$delta[1]
+```
+
+2.4 **2.4 Using the same cv.glm(){boot} function and glm.fit model object, compute and display the 10-Fold cross validation MSE for this model.**
+```{r}
+sal.glm.cv.k10<-cv.glm(Salaries,sal.glm.fit,K=10)
+sal.glm.cv.k10$delta[1]
+```
+2.5 **2.5 Compare the differences between the 10FCV result above and this LOOCV result and provide a brief concluding comment. Is there a meaning to the difference between these 2 MSE values? Please explain why or why not.** The MSE for the K10 result is higher than the LOO result. This will always be the case because the LOO cross-validation is based on n-1 (in this case 398) validation tests wheras the K10 is based on 10 validation tests.
+
+3.1 **3.1 Fit a full model to predict applications using all remaining variables as predictors and name it lm.fit.all.**
+```{r}
+lm.fit.all<-lm(Apps~Accept+Enroll+Top10perc+Top25perc+F.Undergrad+P.Undergrad+Outstate+ Room.Board+Books+Personal+PhD+Terminal+S.F.Ratio+perc.alumni+Expend+Grad.Rate,College)
+```
+
+3.2 **Does the CI provide evidence of severe multicollinearity with the model? Why or why not?** #lm.fit.all.coll<-colldiag(mod = lm.fit.all,scale = FALSE,center = FALSE, add.intercept = TRUE)
+The CI indicates that there is an issue with multicollinearity at at level 8 in the model because the Confidence Index rises above 30 (81.936). The prime contributors to this multicollinearity are "Enroll" (.928) and "F. Undergrad" (.620).
+
+3.3 **3.3 Run the same colldiag() diagnostic, but first using scale=FALSE, center=TRUE, add.intercept=FALSE and then again using scale=TRUE, center=TRUE, add.intercept=FALSE. How do your results change. Please explain why these results changed, if they did?** When the data is centered, the CI at level 8 remains above 30 but is much lower (30.689). The prime contributors remain "Enroll" (.974) and "F.Undergrad"  (.618), nearly identical to the result above. When the data is centered and scaled, the issue with multicollinearity appears to dissappear, with no CI above 30 (highest 13.732).
+```{r}
+lm.fit.all.coll.1<-colldiag(mod = lm.fit.all,scale = FALSE,center = TRUE, add.intercept = FALSE)
+lm.fit.all.coll.2<-colldiag(mod = lm.fit.all,scale = TRUE,center = TRUE, add.intercept = FALSE)
+```
+
+3.4 **Display the lm.fit model summary results and the variance inflation factors (VIF's) for the predictors in the model.**
+```{r}
+summary(lm.fit.all)
+vif(lm.fit.all)
+```
+
+3.5 **Briefly answer: based on your VIF results, is multicollinearity a problem? Why or why not? If so, which variables pose the main problem?** The VIF results appear to show an issue with multicollinearity between "Enroll" and "F.Undergrad"" similar to the CI results above.
+
+3.6 **Fit a reduced model to predict Apps on Enroll and Top10perc only. Name it lm.fit.reduced. Display the CI (using scale=TRUE, center=TRUE, add.intercept=FALSE), model summary results and the VIF's.**
+```{r}
+lm.fit.reduced<-lm(Apps~Enroll+Top10perc,College)
+summary(lm.fit.reduced)
+lm.fit.red.coll<-colldiag(mod = lm.fit.reduced,scale = T,center = T,add.intercept = F)
+lm.fit.red.coll
+vif(lm.fit.reduced)
+```
+
+3.7 **Is there a multicollinearity issue in the model above? Why or why not?** Based on the low condition index and the low VIF levels, there is likely almost no multicollinearity in this model.
+
+4.1 **Fit a large model with all variables that make sense from a business standpoint: Enroll, Top10perc, Outstate, Room.Board, PhD, S.F.Ratio, Expend and Grad.Rate. Name this model lm.fit.large. Display the model summary results.**
+```{r}
+lm.fit.large<-lm(Apps~Enroll+Top10perc+Outstate+Room.Board+PhD+S.F.Ratio+Expend+Grad.Rate,College)
+summary(lm.fit.large)
+```
+
+4.2 **Then, compute the VIF's for this large model and then conduct an ANOVA F test to evaluate if the larger model has more predictive power than the lm.fit.reduced model above. Provide your brief conclusions about what these two tests are telling you and pick a model based on this analysis.** Based on the VIF anf ANOVA below, the large model has better predictive capability (RSS down by ~00 million, higher degrees of freedom, P-value at high significance) while maintaining a low level of multicollinearity (highest is ~3). I would choose the larger model based on these analyses.
+```{r}
+vif(lm.fit.large)
+anova(lm.fit.reduced,lm.fit.large)
+```
+
+4.3 **Best Subset Selection. Fit the same lm.fit.large model above, but this time use the regsubsets(){leaps} function. Store the model summary results summary(lm.fit.large) in an object named large.sum (please note that we are storing the summary() object, not the lm() object). Display fit.large.sum to see all 8 models evaluated by regsubsets().**
+```{r}
+lm.large.regsub<-regsubsets(Apps~Enroll+Top10perc+Outstate+Room.Board+PhD+S.F.Ratio+Expend+Grad.Rate,College)
+fit.large.sum=summary(lm.large.regsub)
+fit.large.sum
+fit.large.table<-cbind("RSS"=fit.large.sum$rss,"AdjR2"=fit.large.sum$adjr2)
+fit.large.table
+```
+
+4.4 **Plot these RSS and AdjR2 side by side. Tip: (1) start with par(mfrow=c(1,2)) to split the display into 1 row and 2 columns; (2) then use the plot() functions with appropriate labels and use the attribute type="l" to get a line; (3) then reset the display to a single plot with par(mfrow=c(1,1)). Based on your plot, which is the best model? Fit an lm() model with the predictors in your selected best model and display the summary() results.** Based on the RSS and AdjR2 of the various models created by the regsubsets function, the best model is model 5. I have created and displayed that model below.
+```{r}
+par(mfrow=c(1,2))
+plot(fit.large.sum$rss,xlab="Number of Variables",ylab="RSS",type="l")
+plot(fit.large.sum$adjr2,xlab="Number of Variables",ylab="AdjR2",type="l")
+par(mfrow=c(1,1))
+lm.fit.best4<-lm(Apps~Enroll+Room.Board+Expend+Grad.Rate,College)
+summary(lm.fit.best4)
+lm.fit.best6<-lm(Apps~Enroll+Top10perc+Room.Board+S.F.Ratio+Expend+Grad.Rate,College)
+summary(lm.fit.best6)
+```
+
+4.5 **Let's try a couple of Stepwise approaches to variable selection using the step(){stats} function. For both approaches, do a stepwise to select the optimal model between lm.fit.reduced and lm.fit.large (tip: the scope=list() functions should have the same scope for both models, from the lower bound model of lm.fit.reduced to the upper bound model of lm.fit.large). Also, in both cases, use direction="both" (for stepwise) and test="F" to get p-values for the predictors.**
+```{r}
+lm.step.fwd<-step(lm.fit.reduced,scope = list(lower=lm.fit.reduced,upper=lm.fit.large),direction = "both",test="F")
+lm.step.bwd<-step(lm.fit.large,scope = list(lower=lm.fit.reduced,upper=lm.fit.large),direction = "both",test="F")
+summary(lm.step.fwd)
+summary(lm.step.bwd)
+summary(lm.fit.best4)
+summary(lm.fit.best6)
+summary(lm.fit.large)
+```
+
+4.6 **Compare the two stepwise results above. Is there any difference? Also, compare your stewise model selection with the model selected above in 4.3 using regsubsets(). Are the models different? Which one would you pick? Is there an additional test to select the best of these models (no need to run the test, just answer the question)** The two stepwise models above are identical to each other and to the lm.fit.best6 model I created manually, but contain fewer variables than the lm.fit.large model. All three use six variables from the lm.fit.large model. I would like to perform ANOVA analysis to see if there is a statistical difference between the models.
+
+5.1 **Ridge Regression: in this section you will be using the glmnet{glmnet} and other related {glmnet} functions to model an fit Ridge regression. First, create an x predictor matrix with all the predictors you used in fit.large above, and a y vector with the Apps response variable. Then fit a Ridge regression x and y. Name the resulting object ridge.mod and display it.** 
+```{r}
+x=model.matrix(Apps ~ Enroll + Top10perc + Outstate + Room.Board + PhD + S.F.Ratio + Expend + Grad.Rate, data = College)
+y=College$Apps
+ridge.mod<-glmnet(x,y,alpha = 0)
+ridge.mod
+```
+5.2 **Using the cv.glmnet(){glmnet} function, compute the cross-validation statistics for the ridge.mod model above (tip: you need to use x and y per above, not ridge.mod). Store the results in an object named ridge.cv.** 
+```{r}
+ridge.cv<-cv.glmnet(x,y,alpha=0)
+head(ridge.cv)
+```
+
+5.3 **Plot the ridge.cv object**
+```{r}
+plot(ridge.cv)
+#cbind("Lambda"=ridge.cv$lambda, "Mean-Squared Error"=ridge.cv$cvm)
+```
+5.4 **Find the best lambda and store it in an object named bestlam. Display the bestlam object.**
+```{r}
+bestlam<-ridge.cv$lambda.min
+```
+
+5.5 **Find the coefficients for a Ridge regression using the best lambda you just found using the keywords type="coefficients" and s=bestlam.** 
+```{r}
+ridge.coeff<-predict(ridge.mod,s=bestlam,type = "coefficients")
+ridge.coeff
+```
+
+5.5a **LASSO regression**
+```{r}
+x=model.matrix(Apps ~ Enroll + Top10perc + Outstate + Room.Board + PhD + S.F.Ratio + Expend + Grad.Rate, data = College)
+y=College$Apps
+lasso.mod<-glmnet(x,y,alpha = 1)
+lasso.mod
+lasso.cv<-cv.glmnet(x,y,alpha=1)
+head(lasso.cv)
+plot(lasso.cv)
+bestlam<-lasso.cv$lambda.min
+lasso.coeff<-predict(lasso.mod,s=bestlam,type = "coefficients")
+par(mfrow=c(1,2))
+ridge.coeff
+lasso.coeff
+set.seed(1)
+collegetest<-sample(1:nrow(College),.1*nrow(College))
+lasso.pred<-predict(lasso.mod,s=bestlam,newx = x[collegetest,])
+ridge.pred<-predict(lasso.mod,s=bestlam,newx = x[collegetest,])
+ridge.pred
+lasso.pred
+```
+
+6.1 **Principal Components Regression (PCR): we will use the pcr(){pls} function and the College{ISLR} data set for this exercise. First, set the seed to 1 (or any number you wish) to get replicable results. Then Split the data into a trainingsubset of 70% of the data. Tip - you can use this function: train=sample(1:nrow(College), 0.7*nrow(College)), which will provide a vector named train with the indices for the training records (can you see why?).** 
+```{r}
+set.seed(23)
+train.college<-sample(1:nrow(College),.7*nrow(College))
+```
+
+6.2 **Fit a PCR model to predict college applications as a function of all remaining variables as predictors, using the training set (i.e., College[train,]). Store the results in an object named pcr.fit. Display the results summary for pcr.fit.** 
+```{r}
+pcr.fit<-pcr(Apps~.,scale=T,data=College[train.college,],validation="CV")
+summary(pcr.fit)
+```
+
+6.3 **Display a scree plot for the MSE of pcr.fit using the validationplot(){pls} function. How many components would you select? Naturally, the MSE goes down as we add more components to the model. The key is to find the minimal number of components that provide an acceptable MSE. In other words, where is the "elbow"?** The "elbow" appears to be around 6 components.
+```{r}
+validationplot(pcr.fit,val.type="MSEP")
+
+```
+
+6.4 **Regardless of your answer in 3 above, compute predicted values for the test data (tip: use College[-train,] for this) using 5 components.** 
+```{r}
+pcr.pred<-predict(pcr.fit,College[-collegetest,],ncomp=5)
+mean((pcr.pred-College[-collegetest,]$Apps)^2)
+```
+
+6.5 **Compute the MSE for the test data.**
+```{r}
+mean((pcr.pred-College[-collegetest,]$Apps)^2)
+```
+
+6.6 **Now fit a model using the full data set and 5 components. Store the results in an object named pcr.fit.5. Display the summary results for pcr.fit.5, its coefficients and loadings.** 
+```{r}
+pcr.fit.5<-pcr(Apps~.,scale=T,data=College,ncomp=5)
+summary(pcr.fit.5)
+pcr.fit.5$coefficients
+pcr.fit.5$loadings
+```
+
+6.7 **Partial Least Squares (PLS): Fitting a PLS model is identical to fitting a PCR model, except that you need to use the plsr() function instead of the pcr() function. Copy and paste the entire script portion for PCR above and paste it into another r code segment. Then change pcr() with plsr() to fit a PLS model. You should also rename all the objects in your script (e.g., rename pcr.fit to pls.fit, etc.)**
+```{r}
+plsr.fit<-plsr(Apps~.,scale=T,data=College[train.college,],validation="CV")
+summary(plsr.fit)
+validationplot(plsr.fit,val.type="MSEP")
+plsr.pred<-predict(plsr.fit,College[-collegetest,],ncomp=5)
+mean((plsr.pred-College[-collegetest,]$Apps)^2)
+
+plsr.fit.5<-plsr(Apps~.,scale=T,data=College,ncomp=5)
+summary(plsr.fit.5)
+plsr.fit.5$coefficients
+plsr.fit.5$loadings
+```

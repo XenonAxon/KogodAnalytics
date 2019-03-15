@@ -1,0 +1,197 @@
+---
+title: "ITEC 621 - Homework 2 - Regression Refresher and Data Pre-Processing"
+author: "Shawn Newman"
+date: "Month dd, yyyy"
+output: html_document
+---
+
+<span style="color:blue">*Note: save this file with the name HW1_YourLastName.Rmd [or HW2, etc.) and complete your homework in it.*</span>
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+library(car)
+library(GGally)
+library(lmtest)
+library(MASS)
+library(lm.beta)
+data("Salaries")
+```
+
+
+**1.1 Descriptive Analytics.** This item shows a histogram for the response variable: salary.
+
+```{r}
+sal.hist<-hist(Salaries$salary)
+sal.hist
+```
+
+**1.2 Normal Q-Q Plot.** This item shows a qqplot an dqqline for Salary.
+
+```{r}
+qqnorm(Salaries$salary)
+qqline(Salaries$salary)
+```
+
+1.3 **Normal Distribution?** This data appears to be somewhat normally distributed, but has a large tail at the upper end.
+
+1.4 **Correlation chart** 
+```{r}
+ggpairs(Salaries)
+```
+
+1.5 **Gender gap in salary?** YEs, there appears to be a gender pay gap with women earning less mean salary than men.
+
+1.6 **Notable Observations?** Rank makes a big difference on the salary with Professors haveing much higher salary. Also, unsurprisingly years since phd and years service have a high level of correlation. 
+
+2.1 **OLS Model Sex only** This model fits a linear model predicting Salaries using only "Sex".
+```{r}
+fit.sexonly<-lm(salary~sex,data = Salaries)
+summary(fit.sexonly)
+```
+
+2.2 **Sex OLS Interpretation** Based on the regresion analysis above, sex appear to have a statistically significant impact on salaries. There is a 99% chance that male professors will earn about $14,088 more than their female peers.
+
+3.1 **OLS - All** This creates a multiple linear regression that analyses all factors in the dataset as independant variables affecting salaries.
+```{r}
+fit.all<-lm(salary~rank+discipline+yrs.since.phd+yrs.service+sex,data = Salaries)
+summary(fit.all)
+```
+
+3.2 **OLS (All) Interpretation** The full OLS model doesn't support the influence of sex on salary because the p-value is less than 80% likely. The full OLS indicated the largest factor in salary is having the rank of Professor.
+
+4.1 **ANOVA of two two models**
+```{r}
+anova(fit.sexonly,fit.all)
+```
+
+4.2 **ANOVA interpretation** The ANOVA table indicates that the full linear model is significantly more predictive than the sex only model. The F value is relatively high with an extremely low P-value indicating thatover 99% certainty that the model is more predictive. This ANOVA indicates that the gender pay gap is more fully explained by the other variables used in the full model. 
+
+5.1 **Variance Inflation Factors**
+```{r}
+fit.all.vif<-vif(fit.all)
+fit.all.vif
+```
+
+5.2 **VIF interpretation** Both yrs.service and yrs.since.phd have elevated levels of collinearity, but with levels below 10, they appear to be tolerable.
+
+5.3 **Breusch-Pagan** Test for Heteroskedasticity
+```{r}
+bptest(fit.all,data = Salaries)
+```
+
+5.4 **Residual plot**
+```{r}
+plot(fit.all,which = 1)
+```
+
+5.5 **Plot interpretation** The Breusch-Pagan test p-value indicated over 99% probability that the BPtest was significant. Additionally, the plot strongly indicates a problem with heteroskedasticity as shown by the increasing variance of residuals as the values increase.
+
+6.1 **Weighted least squares**
+```{r}
+fit.all.wls=lm(salary~rank+discipline+yrs.since.phd+yrs.service+sex, data = Salaries, weights = 1/fit.all$residuals^2)
+summary(fit.all.wls)
+```
+
+6.2 **Respond briefly: based on your WLS results, is there empirical evidence of gender salary inequality? Why or why not?** The weighted results indicate that there is strong evidence for gender salary inequality, a nearly $6000 difference.
+
+6.3 **Briefly comment on the differences between the OLS and WLS models. Which one do you believe? Why and why not?** When the residuals are weighted as we performed in the model above, Gender becomes a significant factor. The Adj R^2 of the WLS model appears to make the model extremely significant.
+
+7.1 **Cars93 Regression**
+```{r}
+cars.fit<-lm(Price~Type+MPG.city+AirBags+Origin, data = Cars93)
+summary(cars.fit)
+```
+
+7.2 **Cars93 LM Interpretation** Both "AirBagsDriver only" and "AirbagsNone" have negative affect on price at over 95% confidence. If a car only has Driver airbags the price falls by about 4.3 and if a car has no airbags the price falls by about 8.9.
+
+7.3 **Cars93 Regression - Relevel Airbags**
+```{r}
+Cars93$AirBags<-relevel(Cars93$AirBags, ref = "None")
+cars.fit<-lm(Price~Type+MPG.city+AirBags+Origin, data = Cars93)
+summary(cars.fit)
+```
+
+7.4 **Cars93 Regression - Relevel Airbags "Interpretation** After releveling the airbags field, the model returns positive results for "Driver Only" and "Passenger" increasing the price by 4.56 and 8.9 respectively, both with over 99% confidence. The difference between no airbags and both airbags is still 8.9, but driver only now represents the difference between 8.9 and the previous value for driver only.
+
+8.1 **Salaries Regression** 
+```{r}
+fit.linear<-lm(salary~rank+yrs.since.phd, data = Salaries)
+summary(fit.linear)
+```
+
+8.2 **What are the best predictors of faculty salaries? Why?** According to the above model, the best predictor of faculty salaries is rank, a rank of Prof gives over 99% chance that the person will earn nearly 48K more.
+
+8.3 **Who makes higher salaries, Assistant Professors, Associate Professors or Professors? How much more, on average?** 
+Associate Professors make about 14K more than Assistant Professors and Professors make about 47K more than Assistant Professors.
+
+8.4 **Does the number of years since obtaining a PhD makes a difference in the salary? Why or why not?** The number of years since obtaining a PhD does not appear to make an impact on salary when the person's rank is taken into account.
+
+8.5 **polynomial model power 4**
+```{r}
+fit.poly<-lm(salary~rank+poly(yrs.since.phd,4), data = Salaries)
+summary(fit.poly)
+```
+
+8.6 **polynomial model power 4 ANOVA**
+```{r}
+anova(fit.linear,fit.poly)
+```
+
+8.7 **Does the polynomial model have more predictive power than the linear model? Why or why not?** The polynomial model appears to better predictive power than the linear model, especially at the third power. This is shown by the low f-test at over 95% significance and the additional dgrees of freedom given by this model.
+
+8.8 **Based on these polynomial regression results, how would you interpret the effct of yrs.since.phd?** Because the cubed results have the best predictive power, I would say the effect of years since PhD on Salaries follows an S-shaped curve, with an initial fast rise in salaries following the degree, followed by a leveling off or slight drop, followed by another rise for the longest-held PhDs.
+
+8.9 **There is a well-known phenomenon in academics called "salary compression" in which newly minted PhD's command higher salaries in the market than older professors. Take a look at the coefficient values and significance levels of both, the rank and all the polynomial terms and discuss whether you see evidence of salary compresion or not. Please briefly explain your rationale.** As mentioned above, this model seems to indicate that Professor salaries follow the salary compression phenomenom.
+
+9.1 **Standardized Coefficients**
+
+```{r}
+fit.unstd<-lm(Price~Type+MPG.city+AirBags+Origin, data = Cars93)
+summary(fit.unstd)
+```
+
+9.2 **Standardized Coefficients**
+```{r}
+lm.std<-lm.beta(fit.unstd)
+summary(lm.std)
+```
+
+9.3 **Answer briefly: what is the difference between the unstandardized and standardized regression results? Why would you use standardized variables or coefficients?**The difference is that the standardized variables yiels a line with an intercept of zero that displays the variables standardized to a common level. Variable standardization seems to amplify the effect of numeric values and diminish the effect of categorical variables. 
+
+9.4 **Answer briefly: is it OK to standardize binary or categorical variables like Type or AirBags How would you get around this issue?** I would avoid standardizing categorical variables as this appears to significantly reduce their impact on the model. 
+
+10.1 **Log Models**Practice with log models using the data from credit.csv 
+```{r}
+credit <- read.table("Credit.csv",header = TRUE,sep = ",")
+hist(credit$Rating)
+qqnorm(credit$Rating)
+qqline(credit$Rating)
+```
+
+10.2 **Checking linear Model**Practice with log models using the data from credit.csv 
+```{r}
+fit.linear<-lm(Rating~Income+Age+Gender,data = credit)
+summary(fit.linear)
+qqnorm(fit.linear$residuals)
+qqline(fit.linear$residuals)
+```
+
+10.3 **Checking linear Model** I think we need to log transform this data, the central tendency is fine, but the tails appear to vary exponentially.
+
+10.4 **Log Model** This will transform the data into log-linear and log-log models, then examine the results of those models.
+```{r}
+fit.log.linear<-lm(log(Rating)~Income+Age+Gender,data = credit)
+fit.log.log<-lm(log(Rating)~log(Income)+Age+Gender,data = credit)
+fit.lin.log<-lm(Rating~log(Income)+Age+Gender,data = credit)
+hist(fit.linear$residuals)
+summary(fit.log.linear)
+hist(fit.log.linear$residuals)
+summary(fit.log.log)
+hist(fit.log.log$residuals)
+summary(fit.lin.log)
+hist(fit.lin.log$residuals)
+```
+
+10.5 **Checking log Model** In the original model, an increase of the Income by 1 increased the Rating by 3.5. In the log-linear model, the same increase raised the log of the Rating by 0.008. In the log-log model, an increase in the log of Income caused the log of Rating to increase by 0.43. I also tested a lin-log model and in that model an increase in the log of income caused a 162 point increase in the Rating.
+
+10.6 **Checking log Model R^2** Although the residuals appear to be closer to normal in the log-lin and log-log models, the adjusted R^2 value is lower (.46 and .43, respectively) than the original linear model (.63). I also tried a lin-log model which had a adjusted R^2 closer to the original but with a more normal distribution.

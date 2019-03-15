@@ -1,0 +1,151 @@
+---
+title: "ITEC 621 - Homework 1 - R Practice"
+author: "Shawn Newman"
+date: "January 20, 2019"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(ggplot2)
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+1. **Rectangle Area** This function takes two variables as input and prints a sentence using those two variables as the sides of a rectangle.
+
+```{r}
+Area = function(x,y){
+  Area.result<-x*y
+  print(paste("The area of a rectangle with sides ",x," X ",y," is ",Area.result,sep = ""))
+}
+Area(3,4)
+```
+
+2. **Rectangle Loop** This function creates a series of ten sentences giving the area of a rectangle with sides i and i*2 where i = 1 through 10.
+
+```{r}
+for(i in 1:10){Area(i,i*2)
+}
+```
+
+3. **Read .csv data file** This code imports a csv file into RStudio as "Credit" and then prints the first six rows of data followed by the first five rows and first five columns.
+
+```{r}
+Credit <- read.table("Credit.csv",header = TRUE,sep = ",")
+head(Credit)
+Credit[1:5,1:5]
+```
+
+4. **lm() model, all variables ** This creates a linear model to explain the credit rating as a function of all available independent variables in "Credit" and then displays the model's summary results.
+
+```{r}
+fit.rating<-lm(Rating~Income+Limit+Cards+Age+Education+Gender+Student+Married+Ethnicity+Balance,Credit)
+summary(fit.rating)
+```
+
+5. **lm() model, 5 variables **
+
+```{r}
+fit.rating.5<-lm(Rating~Income+Limit+Cards+Married+Balance,Credit)
+summary(fit.rating.5)
+
+```
+
+6. **Object's class** Displays the object class (type of data) for Gender, Income, and Cards
+
+```{r}
+class(Credit$Gender)
+class(Credit$Income)
+class(Credit$Cards)
+```
+
+7. **What do these classes mean?** Gender is a factor or categorical variable, this factor has two options in the dataset. Income is a numeric variable that has numbers with values after the decimal place. Cards is an integer value, a variable that only contains whole number values.
+
+```{r}
+Object6Classes<-list("Gender"=c("factor",paste("Gender is a factor or categorical variable, this factor has two options in the dataset.")),"Income"=c("integer",paste("Income is a numeric variable that has numbers with values after the decimal place.")),"Cards"=c("numeric",paste("Cards is an integer value, a variable that only contains whole number values.")))
+Object6Classes
+```
+
+8. **Income.vect** This code isolates the income column and creates a variable with that data called "income.vect," and then displays the first six values of that vector.
+
+```{r}
+income.vect<-Credit$Income
+head(income.vect)
+```
+
+9. **Mean, minimum, maximum, standard deviation and variance** This displays the Mean, Min, max, sd, and var for income.vect.
+
+```{r}
+inc.summ<-list("Mean"=mean(income.vect),"Min" = min(income.vect),"Max"=max(income.vect),"SD"=sd(income.vect),"Var"=var(income.vect))
+inc.summ
+```
+
+10. **Income.stats** This code creates a vector that comtains the Mean, Min, max, sd, and var for Income.vect and then displays this vector.
+
+```{r}
+Income.stats<-c(inc.summ$Mean,inc.summ$Min,inc.summ$Max,inc.summ$SD,inc.summ$Var)
+Income.stats
+```
+
+11. **Vector Names** This code gives names to the values in Income.vect and then displays the vector.
+
+```{r}
+names(Income.stats)<-c("Mean","Min","Max","StDev","Var")
+Income.stats
+```
+
+12. **5% Inflation** This displays the first six values of the income vector after accounting for 5% inflation.
+
+```{r}
+income.vect.5<-income.vect*1.05
+head(income.vect.5)
+```
+
+13. **Income Boxplot** Shows a boxplot for the predictor "Income" within the table Credit.
+
+```{r}
+boxplot(Credit$Income)
+```
+
+14. **Income by Gender Boxplot** Shows a boxplot of "Income" subsetted by the Gender of the individual. This boxplot shows that the top incomes for females are lower than the top incomes for males.
+
+```{r}
+boxplot(Credit$Income~Credit$Gender)
+```
+
+15. **Plot Credit Rating vs. Income**
+
+```{r}
+plot(Credit$Income,Credit$Rating,xlab = "Income",ylab = "Credit Rating")
+```
+
+16. **Credit Rating Histogram** This creates a histogram showing the frequency range of credit ratings.
+
+```{r}
+hist(Credit$Rating,main = "Credit Rating Histogram",xlab = "Rating")
+```
+
+17. **Credit Rating qqplot** 
+
+```{r}
+qqnorm(Credit$Rating)
+qqline(Credit$Rating)
+```
+
+18. **Is data normally distributed? Why or why not?** This data is not normally distributed, the Credit ratings are primarily in the lower range with a smaller tail in the higher end of the range.
+
+```{r}
+```
+
+19. **ggplot2 Histogram** This code creates a histogram of the "Rating" data using ggplot.
+
+```{r}
+RatHist<-ggplot(data = Credit, aes(Credit$Rating)) + geom_histogram()
+RatHist
+```
+
+20. **Dual Line Plot**
+
+```{r}
+RatLine<-ggplot(data = Credit, aes(Income,Rating)) + geom_line()
+RatLine + facet_wrap(~Gender,ncol=2)
+```

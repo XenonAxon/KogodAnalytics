@@ -1,0 +1,325 @@
+---
+title: "ITEC 621 - Homework 1 - R Practice"
+author: "Shawn Newman"
+date: "Month dd, yyyy"
+output: html_document
+---
+
+<span style="color:blue">*Note: save this file with the name HW1_YourLastName.Rmd [or HW2, etc.) and complete your homework in it.*</span>
+
+```{r global_options, include=TRUE}
+knitr::opts_chunk$set(echo=TRUE, message=FALSE)
+library(GGally)
+library(lmtest)
+library(MASS)
+library(lm.beta)
+library(ISLR)
+library(car)
+library(GGally)
+library(lmtest)
+library(MASS)
+library(lm.beta)
+library(boot)
+library(ISLR)
+library(perturb)
+library(leaps)
+library(stats)
+library(glmnet)
+library(pls)
+library(scales)
+library(tree)
+```
+
+**The Analytic Problem** In this analytic project, I will examine a dataset from a Portuguese bank and create a model based on that data to increase the positive response rate. My analysis will determine which variables are the strongest predictors of success and use those variables to create predictions and test my hypothesis. The goal of this model is to improve the efficiency of the bank's term deposit campaigns and to encourage customers to sign up for certificates of deposit at a higher rate.
+
+**The business problem** A bank could make decisions based on this model's results to more efficiently use their resources with a focus on customers that are more likely to sign up. This would likely result in fewer wasted calls while maintaining a high subscription level, improve customer interactions without decreasing profits, and likely lead to better client retention and loyalty in the long-term. Once validated, a similar model could be used by the bank in campaigns for different types of products or by other banks attempting a similar product campaign. These factors would combine to decrease costs, increase income, and improve brand image.
+
+**The Dataset** The data used to build this model was obtained through the UC Irvine Machine Learning Repository and comes originally from a Portuguese banking institution. The organization offered multiple variations on the data, with between 4,119 and 41,188 examples, and between 17 and 20 variables. I chose to use bank-additional-full.csv, which contains the full 41,188 examples and 20 variables. The examples included a response variable "y" which indicates whether a call led to a subscription ("yes" or "no). The rest of the data is divided into three categories: client-specific demographic and banking data, information on the current campaign and previous contact with that client, and social and economic context data. 
+
+**Data ingest and Headers** I started by reading the data into R, looking at the top of the data, and checking the column names.
+
+```{r read_data}
+banking <- read.table("bank-additional-full.csv",header = TRUE,sep = ";")
+head(banking)
+names(banking)
+```
+
+**Understanding the data** I next created a function to quickly summarize my data and create a list of pertinent summary data. I performed a series of descriptive statistics on the information to help me understand how the data is organized, where the potential best predictors are, and how to move forward with predictive analysis.
+
+```{r summarize}
+class_summary<-function(column) {
+  if(class(column)=="factor") {
+    column_summary<-as.data.frame(cbind('column'=print(names(column)),table(column)))
+    names(column_summary)<-c("count")
+    } else {
+      column_summary<-as.data.frame(cbind(print(names(column)),'class'=class(column),'min'=min(column),'max'=max(column),'mean'=round(mean(column),2),'median'=round(median(column),2),'sd'=round(sd(column),2)))
+    }
+  column_summary<-column_summary
+}
+
+
+bank_classes<-list('age'=class_summary(banking$age),'job'=class_summary(banking$job),'marital'=class_summary(banking$marital),'education'=class_summary(banking$education),'default'=class_summary(banking$default),'housing'=class_summary(banking$housing),'loan'=class_summary(banking$loan),'contact'=class_summary(banking$contact),'month'=class_summary(banking$month),'day_of_week'=class_summary(banking$day_of_week),'duration'=class_summary(banking$duration),'campaign'=class_summary(banking$campaign),'pdays'=class_summary(banking$pdays),'previous'=class_summary(banking$previous),'poutcome'=class_summary(banking$poutcome),'emp.var.rate'=class_summary(banking$emp.var.rate),'cons.price.idx'=class_summary(banking$cons.price.idx),'cons.conf.idx'=class_summary(banking$cons.conf.idx),'euribor3m'=class_summary(banking$euribor3m),'nr.employed'=class_summary(banking$nr.employed),'y'=class_summary(banking$y))
+bank_classes
+```
+
+
+1. **Ordering and Transforming** Before using these variables in a model, I needed to understand them and manipulate using a variety of methods. I explain the variables and the methods I used below. Becuase most of these variables are factors and do not have issues with normal distributions or heteroskedasticity, I did not need to test for these issues. Although this data has a time factor (month) there does not appear to be any issue with serial correlation because previous attempts on a client are included in parts of the end result for that client.
+```{r chunk_transform}
+#Y response variable - This was Yes/No, I felt it was easier to use 0/1
+banking$y<-as.integer(as.character(banking$y)=="yes")
+bank_classes$y<-class_summary(banking$y)
+
+# bank client data:
+#Job - This factor variable includes 12 different job categories, I releveled the job data so that the default is unknown
+banking$job<-relevel(banking$job,"unknown")
+bank_classes$job<-class_summary(banking$job)
+
+#Marital - I releveled the marital data so that the default is unknown
+banking$marital<-relevel(banking$marital,"unknown")
+bank_classes$marital<-class_summary(banking$marital)
+
+#Education - I reordered the education to be a better indicator of level of education
+levels(banking$education)<-ordered(c('illiterate','basic.4y','basic.6y','basic.9y','high.school','professional.course','university.degree','unknown'))
+bank_classes$education<-class_summary(banking$education)
+
+#Default, Housing, and Loan were all Yes or no variables. I changed these to a binary variable with 1 as yes
+banking$default<-as.integer(as.character(banking$default)=="yes")
+bank_classes$default<-class_summary(banking$default)
+banking$housing<-as.integer(as.character(banking$housing)=="yes")
+bank_classes$housing<-class_summary(banking$housing)
+banking$loan<-as.integer(as.character(banking$loan)=="yes")
+bank_classes$loan<-class_summary(banking$loan)
+
+#related with the last contact of the current campaign:
+#Order the months of the year
+levels(banking$month)<-ordered(c('mar','apr','may','jun','jul','aug','sep','oct','nov','dec'))
+bank_classes$month<-class_summary(banking$month)
+
+#Order the days of the week
+levels(banking$day_of_week)<-ordered(c( 'mon','tue','wed','thu','fri'))
+bank_classes$day_of_week<-class_summary(banking$day_of_week)
+
+#Fix "999" from pdays
+banking$pdays[banking$pdays==999]<-'0'
+banking$pdays<-as.integer(banking$pdays)
+
+bank_classes
+```
+
+2. **Starting modeling with linear models** Now that I felt confident that I can describe the data, I narrowed down the best descriptors to a reasonable number that balances bias and accuracy. I used stepwise variable selection to help find these variables, but only included the model based on those results below. I initially had some difficulty because I included the "Duration" field which has almost perfect correlation with the response variable. Once I removed this variable from my models, I obtained a better view of the data. I chose to use a training sample size of 70% to train my models leaving 30% for testing my accuracy.
+
+```{r basic_modeling}
+#I created a training sample with 70% of the examples
+set.seed(5)
+btrain<-sample(1:nrow(banking), 0.70*nrow(banking)) 
+
+#I created a full model with all variables (except duration) and a small model with only the previous outcome, which I believed would be a good predictor.
+bank.lm<-glm(y ~ .-duration,data = banking,family=binomial(link="logit"),subset = btrain)
+summary(bank.lm)
+bank.lm.short<-glm(y ~ poutcome,data = banking,family=binomial(link="logit"),subset = btrain)
+summary(bank.lm)
+
+#I am not running these models in this report for speed and length
+#bank.lm.step.fwd<-step(bank.lm.short,scope = list(lower=bank.lm.short,upper=bank.lm),direction = "both",test="F")
+#summary(bank.lm.step.fwd)
+#anova(bank.lm,bank.ext.lm,bank.lm.step.fwd)
+
+
+#This model was the best result of my step model above
+bank.step.poly1<-glm(y ~ poutcome + nr.employed + month + job + contact + cons.conf.idx + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain)
+summary(bank.step.poly1)
+
+#I also tried to predict the y variable using only the external variables (economic indicators) and tried a polynomial model. These models accounted for some of the variation in Y, but missed a lot of the variation.
+bank.ext.lm<-glm(y~emp.var.rate+cons.price.idx+cons.conf.idx+euribor3m+nr.employed,data = banking, family=binomial(link="logit"),subset = btrain)
+summary(bank.ext.lm)
+bank.ext_poly.lm<-glm(y~poly(emp.var.rate,3)+poly(cons.price.idx,3)+poly(cons.conf.idx,3)+poly(euribor3m,3)+poly(nr.employed,3),data = banking, family=binomial(link="logit"),subset = btrain)
+summary(bank.ext_poly.lm)
+bank.ext_short.lm<-glm(y~poly(cons.price.idx,3),data = banking, family=binomial(link="logit"),subset = btrain)
+summary(bank.ext_short.lm)
+#bank.ext.step<-step(bank.ext_short.lm,scope = list(lower=bank.ext_short.lm, upper=bank.ext_poly.lm),direction = "both",test="F")
+#summary(bank.ext.step)
+
+
+#Next I tested a model with only the individual variables, this described more of the variability in Y than the external measures, but was still missing.
+bank.ind.short<-glm(y~loan,data = banking,family=binomial(link="logit"),subset = btrain)
+bank.ind.long<-glm(y~poly(age,4)+job+marital+education+default+housing+loan,data = banking,family=binomial(link="logit"),subset = btrain)
+#bank.ind.step<-step(bank.ind.short,scope = list(lower=bank.ind.short, upper=bank.ind.long),direction = "both",test="F")
+#summary(bank.ind.step)
+
+#In order to validate whether the age had a non-linear impact, I tried modeling based on a fourth degree polynomial of age
+bank.polyage<-glm(y~poly(age,4),data = banking,family=binomial(link="logit"),subset = btrain)
+summary(bank.polyage)
+#I finished by comparing the models above using an anova test
+anova(bank.lm,bank.lm.short,bank.ext.lm,bank.ext_poly.lm,bank.ext_short.lm,bank.ind.short,bank.ind.long)
+```
+
+3. **Stepwise variable selection**
+
+```{r eval=F}
+bank.ext_poly.coll<-colldiag(mod = bank.ext_poly.lm,scale = F,center = F,add.intercept = F)
+bank.ext_poly.coll.2<-colldiag(mod = bank.ext_poly.lm,scale = F,center = T,add.intercept = F)
+bank.ext_poly.coll.3<-colldiag(mod = bank.ext_poly.lm,scale = T,center = T,add.intercept = F)
+bank.ext_poly.coll
+bank.ext_poly.coll.2
+bank.ext_poly.coll.3
+external_measures<-c('emp.var.rate','cons.price.idx','cons.conf.idx','euribor3m','nr.employed')
+banking_ext<-banking[,external_measures]
+ggpairs(banking_ext)
+
+```
+
+4. **predictions and confusion matrices **
+
+```{r}
+confusion<-function(model,dataset,subset,indvar,prediction_point,lda = F) {
+  if (lda==F) {
+  model.pred<-predict(model,dataset,type = 'response')[subset]
+  } else {
+    model.pred<-predict(model,dataset[subset,])
+  }
+  model.prob<-ifelse(model.pred>prediction_point,1,0)
+  if lda==F) {
+  model.tab<-table(model.prob,indvar[subset])
+  } else {
+    model.tab<-table(model.pred$class,indvar[subset])
+    }
+  if (nrow(model.tab)<2) {
+    model.tab<-as.table(rbind(model.tab,c(0,0)))
+  }
+  model.meas<-c('Error Rate'= 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4),'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4),'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4),"Fewer Calls"=(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(model.prob==1)))
+  model.meas<-model.meas
+  model.meas
+}
+
+bank.lda.40.tab<-table(bank.lda.pred$class,banking$y[-btrain])
+
+bank.lda.meas_c<-confusion(bank.lda,banking,-btrain,banking$y,0.4)
+
+
+
+
+bank.lm.meas<-confusion(bank.lm,banking,-btrain,banking$y,0.5)
+bank.lm.short.meas<-confusion(bank.lm.short,banking,-btrain,banking$y,0.5)
+bank.ext.lm.meas<-confusion(bank.ext.lm,banking,-btrain,banking$y,0.5)
+bank.ext_poly.lm.meas<-confusion(bank.ext_poly.lm,banking,-btrain,banking$y,0.5)
+bank.ext_short.lm.meas<-confusion(bank.ext_short.lm,banking,-btrain,banking$y,0.5)
+bank.ind.short.meas<-confusion(bank.ind.short,banking,-btrain,banking$y,0.5)
+bank.ind.long.meas<-confusion(bank.ind.long,banking,-btrain,banking$y,0.5)
+#bank.lm.step.fwd.meas<-confusion(bank.lm.step.fwd,banking,-btrain,banking$y,0.5)
+bank.step.poly1.meas<-confusion(bank.step.poly1,banking,-btrain,banking$y,0.5)
+
+comp.measures<-as.data.frame(rbind(bank.lm.meas,bank.lm.short.meas,bank.ext.lm.meas,bank.ext_poly.lm.meas,bank.ind.long.meas,bank.step.poly1.meas))
+comp.measures$Positive_Likelihood<-round(comp.measures[,2]/(100-comp.measures[,3]),2)
+comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
+comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
+comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
+comp.measures$Positive_Likelihood<-percent(comp.measures$Positive_Likelihood/100,accuracy = .01)
+comp.measures
+```
+
+
+```{r more_models}
+bank.step.poly1<-glm(y ~ poutcome + nr.employed + month + job + contact + cons.conf.idx + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain)
+
+bank.best1<-glm(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain)
+
+bank.best2<-glm(y ~ poutcome + I(nr.employed^2) + I(age^2) + month + job + contact + I(cons.conf.idx^2) + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain)
+
+bank.best3<-glm(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + campaign, family = binomial(link = "logit"), data = banking, subset = btrain)
+
+bank.best4<-glm(y ~ poutcome + I(nr.employed^2) + month + contact + I(cons.conf.idx^2) + pdays + default + campaign, family = binomial(link = "logit"), data = banking, subset = btrain)
+
+bank.best2<-glm(y ~ poutcome + I(nr.employed^2) + I(age^2) + month + job + contact + I(cons.conf.idx^2) + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain, output = "Scatterplot")
+
+bank.best1.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.5)
+bank.best2.meas<-confusion(bank.best2,banking,-btrain,banking$y,0.5)
+bank.best3.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.5)
+bank.best4.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.5)
+bank.best2x.meas<-confusion(bank.best2,banking,-btrain,banking$y,0.06)
+bank.best1x.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.061)
+bank.best4x.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.0605)
+
+
+comp.measures<-as.data.frame(rbind(bank.step.poly1.meas,bank.best1.meas,bank.best2.meas,bank.best3.meas,bank.best4.meas,bank.best2x.meas,bank.best1x.meas,bank.best4x.meas))
+comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
+comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
+comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
+comp.measures$'Fewer Calls'<-round(comp.measures$'Fewer Calls',0)
+comp.measures
+
+anova(bank.step.poly1,bank.best1,bank.best3,bank.best4,bank.best2)
+
+```
+
+6. **Try an LDA**
+
+```{r}
+bank.best3<-glm(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + campaign, family = binomial(link = "logit"), data = banking, subset = btrain)
+
+bank.lda<-lda(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + campaign, data = banking, subset = btrain)
+plot(bank.lda)
+bank.lda.full<-lda(y ~ .-duration, data = banking, subset = btrain)
+
+
+bank.lda.pred<-predict(bank.lda,banking[-btrain,])
+bank.lda.tab<-table(bank.lda.pred$class,banking$y[-btrain])
+bank.lda.tab
+bank.lda.meas<-c("Error Rate"=100*round((bank.lda.tab[1,2]+bank.lda.tab[2,1])/(bank.lda.tab[1,1]+bank.lda.tab[1,2]+bank.lda.tab[2,1]+bank.lda.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.tab[2,2])/(bank.lda.tab[1,2]+bank.lda.tab[2,2]),4),"Specificity"=100*round((bank.lda.tab[1,1])/(bank.lda.tab[1,1]+bank.lda.tab[2,1]),4))
+bank.lda.meas
+
+confusion(bank.lda.pred,banking,bank.lda.pred,)
+
+bank.lda.class.40 = ifelse(bank.lda.pred$posterior[,2]>0.4, 1, 0)
+bank.lda.40.tab<-table(bank.lda.pred$class,banking$y[-btrain])
+bank.lda.40.tab
+bank.lda.40.meas<-c("Error Rate"=100*round((bank.lda.40.tab[1,2]+bank.lda.40.tab[2,1])/(bank.lda.40.tab[1,1]+bank.lda.40.tab[1,2]+bank.lda.40.tab[2,1]+bank.lda.40.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.40.tab[2,2])/(bank.lda.40.tab[1,2]+bank.lda.40.tab[2,2]),4),"Specificity"=100*round((bank.lda.40.tab[1,1])/(bank.lda.40.tab[1,1]+bank.lda.40.tab[2,1]),4))
+bank.lda.40.meas
+
+bank.lda.class.950 = ifelse(bank.lda.pred$posterior[,2]>0.3, 1, 0)
+bank.lda.950.tab<-table(bank.lda.pred$class,banking$y[-btrain])
+bank.lda.950.tab
+bank.lda.950.meas<-c("Error Rate"=100*round((bank.lda.950.tab[1,2]+bank.lda.950.tab[2,1])/(bank.lda.950.tab[1,1]+bank.lda.950.tab[1,2]+bank.lda.950.tab[2,1]+bank.lda.950.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.950.tab[2,2])/(bank.lda.950.tab[1,2]+bank.lda.950.tab[2,2]),4),"Specificity"=100*round((bank.lda.950.tab[1,1])/(bank.lda.950.tab[1,1]+bank.lda.950.tab[2,1]),4))
+bank.lda.950.meas
+
+bank.lda.full.pred<-predict(bank.lda.full,banking[-btrain,])
+bank.lda.full.tab<-table(bank.lda.full.pred$class,banking$y[-btrain])
+bank.lda.full.tab
+bank.lda.full.meas<-c("Error Rate"=100*round((bank.lda.full.tab[1,2]+bank.lda.full.tab[2,1])/(bank.lda.full.tab[1,1]+bank.lda.full.tab[1,2]+bank.lda.full.tab[2,1]+bank.lda.full.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.full.tab[2,2])/(bank.lda.full.tab[1,2]+bank.lda.full.tab[2,2]),4),"Specificity"=100*round((bank.lda.full.tab[1,1])/(bank.lda.full.tab[1,1]+bank.lda.full.tab[2,1]),4))
+bank.lda.full.meas
+
+comp.measures<-as.data.frame(rbind(bank.best3.meas,bank.lda.meas,bank.lda.950.meas,bank.lda.40.meas,bank.lda.full.meas))
+comp.measures$Positive_Likelihood<-round(comp.measures[,2]/(100-comp.measures[,3]),2)
+comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
+comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
+comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
+comp.measures$Positive_Likelihood<-percent(comp.measures$Positive_Likelihood/100,accuracy = .01)
+comp.measures
+
+plot(bank.lda, panel = panel.lda,, cex = 0.7, dimen = 8, abbrev = FALSE, xlab = "LD1", ylab = "LD2")
+plot(bank.lda.full, panel = panel.lda,, cex = 0.7, dimen = 8, abbrev = FALSE, xlab = "LD1", ylab = "LD2")
+
+
+
+```
+
+7. **Classification Tree** I attempted to run classification trees but had difficulty getting the data to return
+
+```{r}
+banking_tree<-banking
+banking_tree$y<-as.factor(as.character(banking$y)=="1")
+
+bank.tree<-tree(y ~ .-duration, data = banking, subset = btrain)
+plot(bank.tree)
+text(bank.tree,pretty = 0)
+bank.tree.class=predict(bank.tree, banking[-btrain,])
+#bank.tree.class
+
+bank.tree.class.4 = ifelse(bank.tree.class>0.5, 1, 0)
+bank.tree.tab<-table(bank.tree.class.4,banking$y[-btrain])
+
+bank.tree2<-tree(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + campaign, data = banking_tree, subset = btrain)
+plot(bank.tree2)
+text(bank.tree2,pretty = 0)
+
+```
+

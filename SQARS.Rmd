@@ -1,0 +1,527 @@
+---
+title: "Email Marketing at Capital OneITEC 621 - Homework 2 - Regression Refresher and Data Pre-Processing"
+author: "Shawn Newman"
+date: "Month dd, yyyy"
+output: html_document
+---
+
+<span style="color:blue">*Note: save this file with the name HW1_YourLastName.Rmd [or HW2, etc.) and complete your homework in it.*</span>
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+options(java.parameters = "-Xmx8g")
+options("stringsAsFactors" = FALSE)
+options(pillar.subtle_num = FALSE)
+options(scipen=999)
+library(dplyr)
+library(mlr)
+library(tidyr)
+library(knitr)
+library(MASS)
+library(tree)
+library(scales)
+library(fastDummies)
+library(randomForest)
+
+```
+
+
+**1.1 Read in Data.** We began by reading in the data to R.
+
+```{r}
+data <- read.csv('C:/Users/shawn/Documents/KSB 620/FINAL2_SAMPLED100.TXT',
+                 na.strings=c("NA","NaN", " ", ""))
+```
+
+**1.2 Remove missing data.** We next removed the variables where 99% of the data was the same.
+
+```{r}
+#---Remove variables with 99% missing (constant)--------------------------------
+data.99 <- removeConstantFeatures(data, perc=0.01) #99% the same value
+
+```
+
+1.3 **Select desired data** Next we selected the desired data fields that we will be working with.
+
+```{r}
+#keep_variables <- c('RESP', 'V41', 'V42', 'V47', 'V48', 'V57', 'V61', 'V85', 'V86', 'V88', 'V90', 'V122', 'V124', 'V126', 'V127', 'V128', 'V129', 'V138', 'V140', 'V159', 'V160', 'V161', 'V162', 'V189', 'V260', 'V272', 'V274', 'V276', 'V278', 'days_since_last_activity', 'State', 'Upmarket', "MATCH")
+keep_variables <- c('RESP', 'V59', 'V61', 'V85', 'V86', 'V88', 'V90', 'V122', 'V124', 'V126', 'V127', 'V128', 'V129', 'V138', 'V140', 'V159', 'V161', 'V162', 'V163', 'V164', 'V167', 'V173', 'V189', 'V260', 'V272', 'V274', 'V276', 'V278', 'days_since_last_activity', 'State', 'Upmarket', "MATCH")
+
+
+data.keep <- data.99[,keep_variables]
+attach(data.keep)
+data_class<-c('RESP'=class(RESP), 'V59'=class(V59), 'V61'=class(V61), 'V85'=class(V85), 'V86'=class(V86), 'V88'=class(V88), 'V90'=class(V90), 'V122'=class(V122), 'V124'=class(V124), 'V126'=class(V126), 'V127'=class(V127), 'V128'=class(V128), 'V129'=class(V129), 'V138'=class(V138), 'V140'=class(V140), 'V159'=class(V159),  'V161'=class(V161), 'V162'=class(V162), 'V163'=class(V163), 'V164'=class(V164), 'V167'=class(V167), 'V173'=class(V173), 'V189'=class(V189), 'V260'=class(V260), 'V272'=class(V272), 'V274'=class(V274), 'V276'=class(V276), 'V278'=class(V278), 'days_since_last_activity'=class(days_since_last_activity), 'State'=class(State), 'Upmarket'=class(Upmarket), 'MATCH'=class(MATCH))#'V41'=class(V41), 'V42'=class(V42), 'V47'=class(V47), 'V48'=class(V48), 'V57'=class(V57),'V160'=class(V160),#
+data_class
+```
+1.3b **Change integers to factors
+```{r}
+data.keep$V59[is.na(data.keep$V59)]<-'1.5'
+data.keep$V59<-as.numeric(data.keep$V59)
+
+data.keep$V61<-as.numeric(data.keep$V61)
+data.keep$V90<-as.numeric(data.keep$V90)
+data.keep$V122<-as.numeric(data.keep$V122)
+data.keep$V124<-as.numeric(data.keep$V124)
+data.keep$V126<-as.numeric(data.keep$V126)
+data.keep$V127<-as.numeric(data.keep$V127)
+data.keep$V128<-as.numeric(data.keep$V128)
+data.keep$V129<-as.numeric(data.keep$V129)
+data.keep$V138<-as.numeric(data.keep$V138)
+data.keep$V140<-as.numeric(data.keep$V140)
+data.keep$V162<-as.numeric(data.keep$V162)
+
+data.keep$V163<-as.integer(as.character(data.keep$V163)=="Y")
+data.keep$V163[is.na(data.keep$V163)]<-'0'
+data.keep$V163<-as.numeric(data.keep$V163)
+data.keep$V164<-as.integer(as.character(data.keep$V164)=="Y")
+data.keep$V164[is.na(data.keep$V164)]<-'0'
+data.keep$V164<-as.numeric(data.keep$V164)
+data.keep$V167<-as.integer(as.character(data.keep$V167)=="Y")
+data.keep$V167[is.na(data.keep$V167)]<-'0'
+data.keep$V167<-as.numeric(data.keep$V167)
+data.keep$V173<-as.integer(as.character(data.keep$V173)=="Y")
+data.keep$V173[is.na(data.keep$V173)]<-'0'
+data.keep$V173<-as.numeric(data.keep$V173)
+data.keep$V260<-as.integer(as.character(data.keep$V260)=="Y")
+data.keep$V260[is.na(data.keep$V260)]<-'0'
+data.keep$V260<-as.numeric(data.keep$V260)
+
+
+data.keep$V88[data.keep$V88==99]<-'1'
+data.keep$V88<-as.numeric(data.keep$V88)
+V88.med<-median(data.keep$V88,na.rm = T)
+data.keep$V88[is.na(data.keep$V88)] <- V88.med
+data.keep$V90[data.keep$V90==99]<-'1'
+data.keep$V90<-as.numeric(data.keep$V90)
+V90.med<-median(data.keep$V90,na.rm = T)
+data.keep$V90[is.na(data.keep$V90)] <- V90.med
+
+data.keep$V162<-as.numeric(data.keep$V162)
+data.keep$days_since_last_activity<-as.numeric(data.keep$days_since_last_activity)
+
+attach(data.keep)
+data_class<-c('RESP'=class(RESP), 'V61'=class(V61), 'V85'=class(V85), 'V86'=class(V86), 'V88'=class(V88), 'V90'=class(V90), 'V122'=class(V122), 'V124'=class(V124), 'V126'=class(V126), 'V127'=class(V127), 'V128'=class(V128), 'V129'=class(V129), 'V138'=class(V138), 'V140'=class(V140), 'V159'=class(V159),  'V161'=class(V161), 'V162'=class(V162), 'V163'=class(V163), 'V164'=class(V164), 'V167'=class(V167), 'V173'=class(V173), 'V189'=class(V189), 'V260'=class(V260), 'V272'=class(V272), 'V274'=class(V274), 'V276'=class(V276), 'V278'=class(V278), 'days_since_last_activity'=class(days_since_last_activity), 'State'=class(State), 'Upmarket'=class(Upmarket), 'MATCH'=class(MATCH))#'V41'=class(V41), 'V42'=class(V42), 'V47'=class(V47), 'V48'=class(V48), 'V57'=class(V57),'V160'=class(V160),#
+data_class
+```
+
+1.4 **Impute missing data** We imputed the median Impute Missings w/Mean & Mode
+
+```{r}
+imp <- mlr::impute(data.keep, classes = list(numeric=imputeMedian(),integer = imputeMedian()),
+                   dummy.classes = c("character", "numeric", "integer"), dummy.type = "numeric") #You can include this or not
+
+data.noMiss <- imp$data
+
+attach(data.noMiss)
+```
+
+1.5 **CReate Dummy Variables** 
+
+```{r}
+#to_dummy <- c('V57', 'V90', 'V48', 'V41', 'V42', 'V138', 'V85', 'V47', 'V86', 'V160', 'V161', 'V159')
+#to_dummy <- c('V61', 'V85', 'V86', 'V88', 'V90', 'V122', 'V124', 'V126', 'V127','V128', 'V129', 'V138', 'V140',  'V162', 'V189','V260', 'V272', 'V274', 'V276', 'V278')#'V41', 'V42', 'V47', 'V48', 'V57', 
+#to_dummy <- c('V140','V90','V88','V48','V42')
+#to_dummy <- c('V61', 'V85', 'V86', 'V122', 'V124','V161')
+#data_dummies <- fastDummies::dummy_cols(data.noMiss, select_columns = to_dummy)
+
+#to_dummy <- c('V126', 'V127','V128', 'V129', 'V138', 'V140')
+#data_dummies <- fastDummies::dummy_cols(data.noMiss, select_columns = to_dummy)
+#to_dummy <- c('V162', 'V189','V260', 'V272', 'V274', 'V276', 'V278')
+# convert to dummy variables and check the data
+to_dummy <- c('V85','V86','V159','V161','V189','V260','State')
+data_dummies <- data.noMiss[keep_variables]
+data_dummies <- fastDummies::dummy_cols(data.noMiss, select_columns = to_dummy)
+head(data_dummies)
+tail(data_dummies)
+
+#to_dummy <- c('V61', 'V85', 'V86', 'V88', 'V90', 'V122', 'V124', 'V126', 'V127','V128', 'V129', 'V138', 'V140', 'V161', 'V162', 'V189','V260', 'V272', 'V274', 'V276', 'V278')#'V41', 'V42', 'V47', 'V48', 'V57', 
+
+# get rid of the original columns that were made into dummy variables
+list_to_keep <- setdiff(names(data_dummies), to_dummy)
+data_dummies <- data_dummies[ , list_to_keep]
+data_dummies <- removeConstantFeatures(data_dummies, perc=0.0001) #99% the same value
+
+#Keep just numeric/integer
+#df<-data_dummies %>%
+  #select_if(is.numeric) %>%
+  #filter(MATCH == 1)
+```
+
+4. **Set up correlation table**
+
+```{r}
+VAR_LIST <- names(df)[ - which(names(df) == "RESP")]
+
+#Set-up df
+col_names <- c("Variable", "Corr", "P.Value", "abs.Corr")
+list <- data.frame(matrix(nrow = length(VAR_LIST), ncol = length(col_names)))
+names(list) <- col_names
+n <- 1
+
+#Run corr for each var
+for (i in 1:(length(VAR_LIST))) {
+  p <- cor.test(df[[VAR_LIST[[i]]]], df$RESP)
+  list[n,"Variable"] <- VAR_LIST[[i]]
+  list[n,"Corr"] <- p$estimate
+  list[n,"P.Value"] <- p$p.value
+  list[n,"abs.Corr"] <- abs(p$estimate)
+  n <- n + 1
+}
+
+#Summarise & Print
+list <- list[order(-list$abs.Corr),]
+kable(list, caption = "Pearson Correlation Coefficients w/RESP ")
+
+```
+
+5. **Test a few GLM models**
+
+```{r}
+set.seed(2)
+dd.train<-sample(1:nrow(data_dummies), 0.70*nrow(data_dummies)) 
+
+#Formula to quickly create confusion matrices
+confusion<-function(model,dataset,subset,indvar,prediction_point) {
+  model.pred<-predict(model,dataset,type = 'response')[subset]
+  model.prob<-ifelse(model.pred>prediction_point,1,0)
+  model.tab<-table(model.prob,indvar[subset])
+  if (nrow(model.tab)<2) {
+    model.tab<-as.table(rbind(model.tab,c(0,0)))
+  }
+  model.meas<-c('Error Rate'= 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4),'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4),'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4))
+  model.meas<-model.meas
+  model.meas
+}
+
+
+fit.1 <- glm(RESP ~ ., data=data_dummies,family=binomial(link="logit"))
+fit.0<-glm(RESP~days_since_last_activity, data=data_dummies,family=binomial(link="logit"))
+#fit.step.2<- step(fit.0, scope=list(lower=fit.0, upper=fit.1), direction="both", test="F")#I tried a stepwise model once I had all the variables input correctly
+#summary(fit.step.2)
+fit.1.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.5)
+fit.1_2.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.3)
+fit.1_3.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.25)
+fit.1_4.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.22)
+fit.1_5.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.21)
+fit.1_6.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.2)
+fit.0.meas<-confusion(fit.0,data_dummies,-dd.train,RESP,.5)
+fit.0_1.meas<-confusion(fit.0,data_dummies,-dd.train,RESP,.21)
+
+comp.measures<-as.data.frame(rbind(fit.1.meas,fit.1_2.meas,fit.1_3.meas,fit.1_4.meas,fit.1_5.meas,fit.1_6.meas))
+
+
+
+fit.step.1<-glm(formula = RESP ~ days_since_last_activity + Upmarket + V162 + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State_WY + State_NE + State_CO + V86_Y + State_MS + V61.dummy + V86_G + State_UT + State_RI + State_MN + State_CA + State_NV + V161_H3 + V161_A4  + V161_B4 + State_WA + V161_T3 + State_MO + State_ND + V86_A + State_PA + V85_S + V86_Z + State_VT + State_OH + State_TX + State_MT + State_NJ + V161_A3, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+fit.step.1.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.5)
+
+
+fit.step.2<-glm(formula = RESP ~ poly(days_since_last_activity,3) + Upmarket + poly(V162,4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State_WY + State_NE + State_CO + V86_Y + State_MS + V61.dummy + V86_G + State_UT + State_RI + State_MN + State_CA + State_NV + V161_H3 + V161_A4  + V161_B4 + State_WA + V161_T3 + State_MO + State_ND + V86_A + State_PA + V85_S + V86_Z + State_VT + State_OH + State_TX + State_MT + State_NJ + V161_A3, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+#fit.1 <- glm(RESP ~ ., data=data_dummies,family=binomial(link="logit"),subset = dd.train)#I had trouble getting this to complete: glm.fit: algorithm did not convergeglm.fit: fitted probabilities numerically 0 or 1 occurred
+#fit.1.w<-glm(RESP ~ ., data=data_dummies,family=binomial(link="logit"),subset = dd.train, weights = 1/fit.1$residuals^2)
+
+
+fit.step.poly<-glm(RESP ~ days_since_last_activity + Upmarket + poly(V162,4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G  + V161_S8 + V86_A , family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+fit.step.poly4<-glm(RESP ~ days_since_last_activity + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + State_CO + V124 + V276 + MATCH + V86_Y + V86_G  + V161_S8 + V86_A, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+fit.step.poly4.1<-glm(RESP ~ days_since_last_activity + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + State_CO + V124 + V276 + MATCH + V86_Y + V86_G   + V161_S8 + V86_A +V163+V164+V167+V173, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+fit.step.poly2<-glm(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+summary(fit.step.poly2)
+
+fit.step.poly2.1<-glm(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V163+V164+V167+V173, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+summary(fit.step.poly2.1)
+
+fit.step.poly3<-glm(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + State_FL + V124 + V276 + State.dummy + V86_G + V161_H3 + V161_A4, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+summary(fit.step.poly3)
+
+fit.step.poly3.1<-glm(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + I(V140^3) + State_FL + V124 + V276 + State.dummy + V86_G + V161_H3 + V161_A4, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+summary(fit.step.poly3.1)
+
+fit.step.poly5i<-glm(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + poly(V140,3) + State_FL + V124 + V276 + State.dummy + MATCH*V162 + V86_G , family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+summary(fit.step.poly5i)
+
+fit.sim.1<-glm(RESP~poly(days_since_last_activity,4), family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+fit.sim.2<-glm(RESP~poly(days_since_last_activity,4)+Upmarket+I(V162^4), family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+fit.sim.3<-glm(RESP~poly(days_since_last_activity,4)+Upmarket+I(V162^4)+V59+V167, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+#fit.sim.3<-glm(RESP~poly(days_since_last_activity,3)+Upmarket+I(V162^4)+V167, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+anova(fit.sim.1, fit.sim.2, fit.sim.3, fit.step.1, fit.step.2, fit.step.poly, fit.step.poly2, fit.step.poly2.1, fit.step.poly3, fit.step.poly3.1, fit.step.poly4, fit.step.poly4.1, fit.step.poly5i)
+
+#fit.sp2<-lm(RESP~bs(V164,knots = c(10,20),degree = 2))
+
+#fit.2 <- glm(RESP ~ days_since_last_activity + Upmarket + MATCH + V90_1 + V140_2 + V140_4 + V140_1 + V88_1 + V48.dummy + V42.dummy, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
+
+#fit.3 <- glm(RESP ~ days_since_last_activity + Upmarket + MATCH + V272 + V274 +V276 + V278 + V90_1 + V140_2 + V140_4 + V140_1 + V88_1 + V48.dummy + V42.dummy, data=data_dummies)
+#fit.4 <- glm(RESP ~ days_since_last_activity + Upmarket + MATCH + V272 + V274 +V276 + V278 + V90_1 + V140_2 + V140_4 + V140_1 + V88_1 + V48.dummy + V42.dummy, data=data_dummies)
+#fit.scores<- glm(RESP ~ V272 + V274 +V276 + V278, data=data_dummies)
+#fit.scores.2<- glm(RESP ~ Upmarket + V272 + V274 +V276 + V278, data=data_dummies)
+
+```
+
+
+```{r}
+fit.step.1.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.5)
+fit.step.2.meas<-confusion(fit.step.2,data_dummies,-dd.train,RESP,.5)
+fit.step.poly.meas<-confusion(fit.step.poly,data_dummies,-dd.train,RESP,.5)
+fit.step.poly4.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,RESP,.5)
+fit.step.poly4.1.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,RESP,.5)
+fit.step.poly2.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,RESP,.5)
+fit.step.poly2.1.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,RESP,.5)
+fit.step.poly3.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,RESP,.5)
+fit.step.poly3.1.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,RESP,.5)
+fit.step.poly5i.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,RESP,.5)
+fit.sim.1.meas<-confusion(fit.sim.1,data_dummies,-dd.train,RESP,.5)
+fit.sim.2.meas<-confusion(fit.sim.2,data_dummies,-dd.train,RESP,.5)
+fit.sim.3.meas<-confusion(fit.sim.3,data_dummies,-dd.train,RESP,.5)
+
+#30% probablity
+fit.step.1_1.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.3)
+fit.step.2_1.meas<-confusion(fit.step.2,data_dummies,-dd.train,RESP,.3)
+fit.step.poly_1.meas<-confusion(fit.step.poly,data_dummies,-dd.train,RESP,.3)
+fit.step.poly4_1.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,RESP,.3)
+fit.step.poly4.1_1.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,RESP,.3)
+fit.step.poly2_1.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,RESP,.3)
+fit.step.poly2.1_1.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,RESP,.3)
+fit.step.poly3_1.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,RESP,.3)
+fit.step.poly3.1_1.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,RESP,.3)
+fit.step.poly5i_1.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,RESP,.3)
+fit.sim.1_1.meas<-confusion(fit.sim.1,data_dummies,-dd.train,RESP,.3)
+fit.sim.2_1.meas<-confusion(fit.sim.2,data_dummies,-dd.train,RESP,.3)
+fit.sim.3_1.meas<-confusion(fit.sim.3,data_dummies,-dd.train,RESP,.3)
+
+
+#25% Probability
+fit.step.1_2.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.25)
+fit.step.2_2.meas<-confusion(fit.step.2,data_dummies,-dd.train,RESP,.25)
+fit.step.poly_2.meas<-confusion(fit.step.poly,data_dummies,-dd.train,RESP,.25)
+fit.step.poly4_2.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,RESP,.25)
+fit.step.poly4.1_2.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,RESP,.25)
+fit.step.poly2_2.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,RESP,.25)
+fit.step.poly2.1_2.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,RESP,.25)
+fit.step.poly3_2.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,RESP,.25)
+fit.step.poly3.1_2.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,RESP,.25)
+fit.step.poly5i_2.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,RESP,.25)
+fit.sim.1_2.meas<-confusion(fit.sim.1,data_dummies,-dd.train,RESP,.25)
+fit.sim.2_2.meas<-confusion(fit.sim.2,data_dummies,-dd.train,RESP,.25)
+fit.sim.3_2.meas<-confusion(fit.sim.3,data_dummies,-dd.train,RESP,.25)
+
+
+comp.measures<-as.data.frame(rbind(fit.sim.1.meas, fit.sim.1_1.meas, fit.sim.1_2.meas, fit.sim.2.meas, fit.sim.2_1.meas, fit.sim.2_2.meas, fit.sim.3.meas, fit.sim.3_1.meas, fit.sim.3_2.meas, fit.step.1.meas, fit.step.1_1.meas, fit.step.1_2.meas, fit.step.2.meas, fit.step.2_1.meas, fit.step.2_2.meas, fit.step.poly.meas, fit.step.poly_1.meas, fit.step.poly_2.meas, fit.step.poly2.1.meas, fit.step.poly2.1_1.meas, fit.step.poly2.1_2.meas, fit.step.poly2.meas, fit.step.poly2_1.meas, fit.step.poly2_2.meas, fit.step.poly3.1.meas, fit.step.poly3.1_1.meas, fit.step.poly3.1_2.meas, fit.step.poly3.meas, fit.step.poly3_1.meas, fit.step.poly3_2.meas, fit.step.poly4.1.meas, fit.step.poly4.1_1.meas, fit.step.poly4.1_2.meas, fit.step.poly4.meas, fit.step.poly4_1.meas, fit.step.poly4_2.meas, fit.step.poly5i.meas, fit.step.poly5i_1.meas, fit.step.poly5i_2.meas))
+comp.measures$Positive_Likelihood<-round(comp.measures[,2]/(100-comp.measures[,3]),2)
+comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
+comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
+comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
+comp.measures$Positive_Likelihood<-percent(comp.measures$Positive_Likelihood/100,accuracy = .01)
+write.csv(comp.measures,file="comp_measures.csv")
+
+```
+
+6. **Trying an LDA model**
+
+```{r}
+library(MASS)
+fit.lda1<-lda(RESP ~ days_since_last_activity + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL+ State_CO + V124 + V276 + MATCH + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z, data = data_dummies,subset = dd.train)
+prob.lda1<-predict(fit.lda1,data_dummies[-dd.train,])
+tab.lda1<-table(prob.lda1$class,data_dummies$RESP[-dd.train])
+tab.lda1
+meas.lda1<-c("Error Rate"=100*round((tab.lda1[1,2]+tab.lda1[2,1])/(tab.lda1[1,1]+tab.lda1[1,2]+tab.lda1[2,1]+tab.lda1[2,2]),4),"Sensitivity"=100*round((tab.lda1[2,2])/(tab.lda1[1,2]+tab.lda1[2,2]),4),"Specificity"=100*round((tab.lda1[1,1])/(tab.lda1[1,1]+tab.lda1[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda1$class==1)))
+meas.lda1
+
+
+fit.lda2<-lda(RESP ~ ., data = data_dummies,subset = dd.train)
+prob.lda2<-predict(fit.lda2,data_dummies[-dd.train,])
+tab.lda2<-table(prob.lda2$class,data_dummies$RESP[-dd.train])
+tab.lda2
+meas.lda2<-c("Error Rate"=100*round((tab.lda2[1,2]+tab.lda2[2,1])/(tab.lda2[1,1]+tab.lda2[1,2]+tab.lda2[2,1]+tab.lda2[2,2]),4),"Sensitivity"=100*round((tab.lda2[2,2])/(tab.lda2[1,2]+tab.lda2[2,2]),4),"Specificity"=100*round((tab.lda2[1,1])/(tab.lda2[1,1]+tab.lda2[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda2$class==1)))
+meas.lda2
+
+fit.lda3<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167, data = data_dummies,subset = dd.train)
+prob.lda3<-predict(fit.lda3,data_dummies[-dd.train,])
+tab.lda3<-table(prob.lda3$class,data_dummies$RESP[-dd.train])
+tab.lda3
+meas.lda3<-c("Error Rate"=100*round((tab.lda3[1,2]+tab.lda3[2,1])/(tab.lda3[1,1]+tab.lda3[1,2]+tab.lda3[2,1]+tab.lda3[2,2]),4),"Sensitivity"=100*round((tab.lda3[2,2])/(tab.lda3[1,2]+tab.lda3[2,2]),4),"Specificity"=100*round((tab.lda3[1,1])/(tab.lda3[1,1]+tab.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda3$class==1)))
+meas.lda3
+
+class3.lda3 = ifelse(prob.lda3$posterior[,2]>0.3, 1, 0)
+tab3.lda3<-table(class3.lda3,data_dummies$RESP[-dd.train])
+meas3.lda3<-c("Error Rate"=100*round((tab3.lda3[1,2]+tab3.lda3[2,1])/(tab3.lda3[1,1]+tab3.lda3[1,2]+tab3.lda3[2,1]+tab3.lda3[2,2]),4),"Sensitivity"=100*round((tab3.lda3[2,2])/(tab3.lda3[1,2]+tab3.lda3[2,2]),4),"Specificity"=100*round((tab3.lda3[1,1])/(tab3.lda3[1,1]+tab3.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class3.lda3==1)))
+meas3.lda3
+
+
+class25.lda3 = ifelse(prob.lda3$posterior[,2]>0.04, 1, 0)
+tab25.lda3<-table(class25.lda3,data_dummies$RESP[-dd.train])
+meas25.lda3<-c("Error Rate"=100*round((tab25.lda3[1,2]+tab25.lda3[2,1])/(tab25.lda3[1,1]+tab25.lda3[1,2]+tab25.lda3[2,1]+tab25.lda3[2,2]),4),"Sensitivity"=100*round((tab25.lda3[2,2])/(tab25.lda3[1,2]+tab25.lda3[2,2]),4),"Specificity"=100*round((tab25.lda3[1,1])/(tab25.lda3[1,1]+tab25.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class25.lda3==1)))
+meas25.lda3
+
+class20.lda3 = ifelse(prob.lda3$posterior[,2]>0.2, 1, 0)
+tab20.lda3<-table(class20.lda3,data_dummies$RESP[-dd.train])
+meas20.lda3<-c("Error Rate"=100*round((tab20.lda3[1,2]+tab20.lda3[2,1])/(tab20.lda3[1,1]+tab20.lda3[1,2]+tab20.lda3[2,1]+tab20.lda3[2,2]),4),"Sensitivity"=100*round((tab20.lda3[2,2])/(tab20.lda3[1,2]+tab20.lda3[2,2]),4),"Specificity"=100*round((tab20.lda3[1,1])/(tab20.lda3[1,1]+tab20.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class20.lda3==1)))
+meas20.lda3
+
+fit.lda5<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data_dummies,subset = dd.train)
+prob.lda5<-predict(fit.lda5,data_dummies[-dd.train,])
+tab.lda5<-table(prob.lda5$class,data_dummies$RESP[-dd.train])
+tab.lda5
+meas.lda5<-c("Error Rate"=100*round((tab.lda5[1,2]+tab.lda5[2,1])/(tab.lda5[1,1]+tab.lda5[1,2]+tab.lda5[2,1]+tab.lda5[2,2]),4),"Sensitivity"=100*round((tab.lda5[2,2])/(tab.lda5[1,2]+tab.lda5[2,2]),4),"Specificity"=100*round((tab.lda5[1,1])/(tab.lda5[1,1]+tab.lda5[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda5$class==1)))
+meas.lda5
+
+class3.lda5 = ifelse(prob.lda5$posterior[,2]>0.3, 1, 0)
+tab3.lda5<-table(class3.lda5,data_dummies$RESP[-dd.train])
+meas3.lda5<-c("Error Rate"=100*round((tab3.lda5[1,2]+tab3.lda5[2,1])/(tab3.lda5[1,1]+tab3.lda5[1,2]+tab3.lda5[2,1]+tab3.lda5[2,2]),4),"Sensitivity"=100*round((tab3.lda5[2,2])/(tab3.lda5[1,2]+tab3.lda5[2,2]),4),"Specificity"=100*round((tab3.lda5[1,1])/(tab3.lda5[1,1]+tab3.lda5[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class3.lda5==1)))
+meas3.lda5
+
+class04.lda5 = ifelse(prob.lda5$posterior[,2]>0.04, 1, 0)
+tab04.lda5<-table(class04.lda5,data_dummies$RESP[-dd.train])
+meas04.lda5<-c("Error Rate"=100*round((tab04.lda5[1,2]+tab04.lda5[2,1])/(tab04.lda5[1,1]+tab04.lda5[1,2]+tab04.lda5[2,1]+tab04.lda5[2,2]),4),"Sensitivity"=100*round((tab04.lda5[2,2])/(tab04.lda5[1,2]+tab04.lda5[2,2]),4),"Specificity"=100*round((tab04.lda5[1,1])/(tab04.lda5[1,1]+tab04.lda5[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class04.lda5==1)))
+meas04.lda5
+
+#####We have a winner
+class02.lda5 = ifelse(prob.lda5$posterior[,2]>0.022, 1, 0)
+tab.best.lda<-table(class02.lda5,data_dummies$RESP[-dd.train])
+meas02.lda5<-c("Error Rate"=100*round((tab.best.lda[1,2]+tab.best.lda[2,1])/(tab.best.lda[1,1]+tab.best.lda[1,2]+tab.best.lda[2,1]+tab.best.lda[2,2]),4),"Sensitivity"=100*round((tab.best.lda[2,2])/(tab.best.lda[1,2]+tab.best.lda[2,2]),4),"Specificity"=100*round((tab.best.lda[1,1])/(tab.best.lda[1,1]+tab.best.lda[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class02.lda5==1)))
+meas02.lda5
+
+
+fit.lda4<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z, data = data_dummies,subset = dd.train)
+prob.lda4<-predict(fit.lda4,data_dummies[-dd.train,])
+tab.lda4<-table(prob.lda4$class,data_dummies$RESP[-dd.train])
+tab.lda4
+meas.lda4<-c("Error Rate"=100*round((tab.lda4[1,2]+tab.lda4[2,1])/(tab.lda4[1,1]+tab.lda4[1,2]+tab.lda4[2,1]+tab.lda4[2,2]),4),"Sensitivity"=100*round((tab.lda4[2,2])/(tab.lda4[1,2]+tab.lda4[2,2]),4),"Specificity"=100*round((tab.lda4[1,1])/(tab.lda4[1,1]+tab.lda4[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda4$class==1)))
+meas.lda4
+
+fit.best.lda<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data_dummies,subset = dd.train)
+prob.best.lda<-predict(fit.best.lda,data_dummies[-dd.train,])
+
+best.lda.022 = ifelse(prob.best.lda$posterior[,2]>0.022, 1, 0)
+tab.best.lda<-table(best.lda.022,data_dummies$RESP[-dd.train])
+meas.best.lda<-c("Error Rate"=100*round((tab.best.lda[1,2]+tab.best.lda[2,1])/(tab.best.lda[1,1]+tab.best.lda[1,2]+tab.best.lda[2,1]+tab.best.lda[2,2]),4),"Sensitivity"=100*round((tab.best.lda[2,2])/(tab.best.lda[1,2]+tab.best.lda[2,2]),4),"Specificity"=100*round((tab.best.lda[1,1])/(tab.best.lda[1,1]+tab.best.lda[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(best.lda.022==1)))
+meas.best.lda
+
+fit.best.lda2<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + V276*days_since_last_activity + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data_dummies,subset = dd.train)
+prob.best.lda2<-predict(fit.best.lda2,data_dummies[-dd.train,])
+
+best.lda.005 = ifelse(prob.best.lda2$posterior[,2]>0.0205, 1, 0)
+tab.best.lda.005<-table(best.lda.005,data_dummies$RESP[-dd.train])
+meas.best.lda.005<-c("Error Rate"=100*round((tab.best.lda.005[1,2]+tab.best.lda.005[2,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[1,2]+tab.best.lda.005[2,1]+tab.best.lda.005[2,2]),4),"Sensitivity"=100*round((tab.best.lda.005[2,2])/(tab.best.lda.005[1,2]+tab.best.lda.005[2,2]),4),"Specificity"=100*round((tab.best.lda.005[1,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(best.lda.005==1)))
+meas.best.lda.005
+
+
+```
+
+7. **What do these classes mean?**
+
+```{r}
+comp.measures<-as.data.frame(rbind(meas.lda1, meas.lda2, meas.lda3, meas.lda4, meas.lda5, meas02.lda5, meas04.lda5, meas20.lda3, meas25.lda3, meas3.lda3, meas3.lda5,meas.best.lda,meas.best.lda.005))
+#comp.measures$Negative_Likelihood<-round((1-comp.measures[,2])/comp.measures[,3],2)
+comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
+comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
+comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
+#comp.measures$Negative_Likelihood<-percent(comp.measures$Negative_Likelihood/100,accuracy = .01)
+comp.measures
+write.csv(comp.measures,file="comp_measures_LDA.csv")
+
+
+```
+
+8. **Tree time**
+
+```{r}
+data_dummies.factor<-data_dummies
+data_dummies.factor$RESP<-as.factor(data_dummies.factor$RESP)
+tree.1<-tree(RESP~.,data = data_dummies.factor,subset = dd.train)
+summary(tree.1)
+plot(tree.1)
+text(tree.1,pretty = 0)
+#tree.1.prun<-prune.tree(tree.1,best = 6)
+tree.1.pred<-predict(tree.1,data_dummies.factor[-dd.train,])
+tree.1.pred
+
+bag.tree.1<-randomForest(RESP~.,data=data_dummies.factor,subset=dd.train, importance=TRUE)
+
+
+```
+
+
+```{r FullData}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+options(java.parameters = "-Xmx8g")
+options("stringsAsFactors" = FALSE)
+options(pillar.subtle_num = FALSE)
+options(scipen=999)
+library(dplyr)
+library(mlr)
+library(tidyr)
+library(knitr)
+library(MASS)
+library(tree)
+library(scales)
+library(fastDummies)
+library(randomForest)
+
+#Import Data
+data.full <- read.csv('C:/Users/shawn/Documents/KSB 620/FINAL2_FULL.TXT',
+                 na.strings=c("NA","NaN", " ", ""))
+keep_variables <- c('RESP', 'days_since_last_activity','State', 'Upmarket', "MATCH", 'V59', 'V86', 'V124', 'V140', 'V161', 'V162', 'V167', 'V276')
+data.dim <- data.full[,keep_variables]
+attach(data.dim)
+data_class<-c('RESP'=class(RESP), 'V59'=class(V59), 'V86'=class(V86), 'V124'=class(V124), 'V140'=class(V140),  'V161'=class(V161), 'V162'=class(V162), 'V167'=class(V167), 'V276'=class(V276), 'days_since_last_activity'= class(days_since_last_activity), 'State'=class(State), 'Upmarket'=class(Upmarket),  'MATCH'=class(MATCH)) 
+data_class
+
+#Transform and Impute
+data.dim$days_since_last_activity<-as.numeric(data.dim$days_since_last_activity)
+data.dim$V59[is.na(data.dim$V59)]<-'1.5' #MissinGender
+data.dim$V59<-as.numeric(data.dim$V59) 
+data.dim$V124<-as.numeric(data.dim$V124)
+data.dim$V140<-as.numeric(data.dim$V140)
+data.dim$V162<-as.numeric(data.dim$V162)
+data.dim$V167<-as.integer(as.character(data.dim$V167)=="Y")
+data.dim$V167[is.na(data.dim$V167)]<-'0'
+data.dim$V167<-as.numeric(data.dim$V167)
+
+imp <- mlr::impute(data.dim, classes = list(numeric=imputeMedian(),integer = imputeMedian()),
+                   dummy.classes = c("character", "numeric", "integer"), dummy.type = "numeric")
+data.dim.imp <- imp$data
+
+#Create Dummies
+to_dummy <- c('V86','V161','State')
+data.dim.dum <- data.dim.imp[keep_variables]
+data.dim.dum <- fastDummies::dummy_cols(data.dim.imp, select_columns = to_dummy)
+list_to_keep <- setdiff(names(data.dim.dum), to_dummy)
+data.dim.dum <- data.dim.dum[ , list_to_keep]
+data.dim.dum <- removeConstantFeatures(data.dim.dum, perc=0.0001)
+attach(data.dim.dum)
+
+set.seed(132)
+dd.trn<-sample(1:nrow(data.dim.dum), 0.70*nrow(data.dim.dum)) 
+
+fit.best.lda<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data.dim.dum,subset = dd.trn)
+prob.best.lda<-predict(fit.best.lda,data.dim.dum[-dd.trn,])
+
+best.lda.022 = ifelse(prob.best.lda$posterior[,2]>0.001, 1, 0)
+tab.best.lda<-table(best.lda.022,data.dim.dum$RESP[-dd.trn])
+meas.best.lda<-c("Error Rate"=100*round((tab.best.lda[1,2]+tab.best.lda[2,1])/(tab.best.lda[1,1]+tab.best.lda[1,2]+tab.best.lda[2,1]+tab.best.lda[2,2]),4),"Sensitivity"=100*round((tab.best.lda[2,2])/(tab.best.lda[1,2]+tab.best.lda[2,2]),4),"Specificity"=100*round((tab.best.lda[1,1])/(tab.best.lda[1,1]+tab.best.lda[2,1]),4),"Emails Dropped"=(sum(data.dim.dum$RESP[-dd.trn]==1)+sum(data.dim.dum$RESP[-dd.trn]==0)-sum(best.lda.022==1)))
+meas.best.lda
+
+fit.best.lda2<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + V276*days_since_last_activity + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data.dim.dum,subset = dd.trn)
+prob.best.lda2<-predict(fit.best.lda2,data.dim.dum[-dd.trn,])
+
+best.lda.005 = ifelse(prob.best.lda2$posterior[,2]>0.000974, 1, 0)
+tab.best.lda.005<-table(best.lda.005,data.dim.dum$RESP[-dd.trn])
+meas.best.lda.005<-c("Error Rate"=100*round((tab.best.lda.005[1,2]+tab.best.lda.005[2,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[1,2]+tab.best.lda.005[2,1]+tab.best.lda.005[2,2]),4),"Sensitivity"=100*round((tab.best.lda.005[2,2])/(tab.best.lda.005[1,2]+tab.best.lda.005[2,2]),4),"Specificity"=100*round((tab.best.lda.005[1,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[2,1]),4),"Emails Dropped"=(sum(data.dim.dum$RESP[-dd.trn]==1)+sum(data.dim.dum$RESP[-dd.trn]==0)-sum(best.lda.005==1)))
+meas.best.lda
+meas.best.lda.005
+
+comp.measures<-as.data.frame(rbind(fit.sim.1.meas,fit.sim.2.meas,fit.sim.3.meas,fit.step.1.meas,fit.step.2.meas,fit.step.poly.meas,fit.step.poly2.meas,fit.step.poly2.1.meas,fit.step.poly3.meas,fit.step.poly3.1.meas,fit.step.poly4.meas,fit.step.poly4.1.meas,fit.step.poly5i.meas,meas.lda1,meas.lda2,meas.lda3,meas.lda4))
+comp.measures$Negative_Likelihood<-round((1-comp.measures[,2])/comp.measures[,3],2)
+comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
+comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
+comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
+comp.measures$Negative_Likelihood<-percent(comp.measures$Negative_Likelihood/100,accuracy = .01)
+comp.measures
+
+```
