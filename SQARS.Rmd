@@ -325,6 +325,18 @@ write.csv(comp.measures,file="comp_measures.csv")
 
 ```{r}
 library(MASS)
+confusion_lda<-function(model,dataset,subset,indvar,prediction_point) {
+  model.pred<-predict(model,dataset[subset])
+  model.prob<-ifelse(model.pred$posterior[,2]>prediction_point,1,0)
+  model.tab<-table(model.prob,indvar[subset])
+  if (nrow(model.tab)<2) {
+    model.tab<-as.table(rbind(model.tab,c(0,0)))
+  }
+  model.meas<-c('Error Rate'= 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4),'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4),'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Fewer Calls" = (sum(indvar[subset]==1)+sum(indvar[subset]==0)-sum(model.prob==1)))
+  model.meas<-model.meas
+  model.meas
+}
+
 fit.lda1<-lda(RESP ~ days_since_last_activity + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL+ State_CO + V124 + V276 + MATCH + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z, data = data_dummies,subset = dd.train)
 prob.lda1<-predict(fit.lda1,data_dummies[-dd.train,])
 tab.lda1<-table(prob.lda1$class,data_dummies$RESP[-dd.train])

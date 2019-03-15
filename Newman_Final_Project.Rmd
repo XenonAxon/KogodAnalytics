@@ -90,6 +90,10 @@ bank_classes$housing<-class_summary(banking$housing)
 banking$loan<-as.integer(as.character(banking$loan)=="yes")
 bank_classes$loan<-class_summary(banking$loan)
 
+banking$poutcome<-as.integer(as.character(banking$poutcome)=="success")
+bank_classes$poutcome<-class_summary(banking$poutcome)
+
+
 #related with the last contact of the current campaign:
 #Order the months of the year
 levels(banking$month)<-ordered(c('mar','apr','may','jun','jul','aug','sep','oct','nov','dec'))
@@ -98,6 +102,7 @@ bank_classes$month<-class_summary(banking$month)
 #Order the days of the week
 levels(banking$day_of_week)<-ordered(c( 'mon','tue','wed','thu','fri'))
 bank_classes$day_of_week<-class_summary(banking$day_of_week)
+
 
 #Fix "999" from pdays
 banking$pdays[banking$pdays==999]<-'0'
@@ -153,9 +158,8 @@ summary(bank.polyage)
 anova(bank.lm,bank.lm.short,bank.ext.lm,bank.ext_poly.lm,bank.ext_short.lm,bank.ind.short,bank.ind.long)
 ```
 
-3. **Stepwise variable selection**
-
-```{r eval=F}
+3. **Selecting the external variables** I thought that the external variables were likely to have issues with multicollinearity, so I ran a few diagnostics to test this hypothesis. I was correct in that 'emp.var.rate','cons.price.idx','euribor3m',and 'nr.employed' were all highly correlated. I chose 'cons.conf.idx' and 'nr.employed' because these seemed to provide the best predictions without adding significant multicollinearity.
+```{r}
 bank.ext_poly.coll<-colldiag(mod = bank.ext_poly.lm,scale = F,center = F,add.intercept = F)
 bank.ext_poly.coll.2<-colldiag(mod = bank.ext_poly.lm,scale = F,center = T,add.intercept = F)
 bank.ext_poly.coll.3<-colldiag(mod = bank.ext_poly.lm,scale = T,center = T,add.intercept = F)
@@ -165,38 +169,21 @@ bank.ext_poly.coll.3
 external_measures<-c('emp.var.rate','cons.price.idx','cons.conf.idx','euribor3m','nr.employed')
 banking_ext<-banking[,external_measures]
 ggpairs(banking_ext)
-
 ```
 
-4. **predictions and confusion matrices **
-
+4. **predictions and confusion matrices ** I thought that a good method to assess the predictive capabilities of these models was with a confusion matrix. I wanted to test a lot of different models, so I created the function below to quickly output a confusion matrix for each table. Using this method, I realized that at .5 level of prediction, my best model was 'bank.lm'. My first comparison table is below.
 ```{r}
-confusion<-function(model,dataset,subset,indvar,prediction_point,lda = F) {
-  if (lda==F) {
+confusion<-function(model,dataset,subset,indvar,prediction_point) {
   model.pred<-predict(model,dataset,type = 'response')[subset]
-  } else {
-    model.pred<-predict(model,dataset[subset,])
-  }
   model.prob<-ifelse(model.pred>prediction_point,1,0)
-  if lda==F) {
   model.tab<-table(model.prob,indvar[subset])
-  } else {
-    model.tab<-table(model.pred$class,indvar[subset])
-    }
   if (nrow(model.tab)<2) {
     model.tab<-as.table(rbind(model.tab,c(0,0)))
   }
-  model.meas<-c('Error Rate'= 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4),'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4),'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4),"Fewer Calls"=(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(model.prob==1)))
+  model.meas<-c('Error Rate' = 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4), 'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4), 'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Fewer Calls" = (sum(indvar[subset]==1)+sum(indvar[subset]==0)-sum(model.prob==1)))
   model.meas<-model.meas
   model.meas
 }
-
-bank.lda.40.tab<-table(bank.lda.pred$class,banking$y[-btrain])
-
-bank.lda.meas_c<-confusion(bank.lda,banking,-btrain,banking$y,0.4)
-
-
-
 
 bank.lm.meas<-confusion(bank.lm,banking,-btrain,banking$y,0.5)
 bank.lm.short.meas<-confusion(bank.lm.short,banking,-btrain,banking$y,0.5)
@@ -209,15 +196,13 @@ bank.ind.long.meas<-confusion(bank.ind.long,banking,-btrain,banking$y,0.5)
 bank.step.poly1.meas<-confusion(bank.step.poly1,banking,-btrain,banking$y,0.5)
 
 comp.measures<-as.data.frame(rbind(bank.lm.meas,bank.lm.short.meas,bank.ext.lm.meas,bank.ext_poly.lm.meas,bank.ind.long.meas,bank.step.poly1.meas))
-comp.measures$Positive_Likelihood<-round(comp.measures[,2]/(100-comp.measures[,3]),2)
 comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
 comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
 comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
-comp.measures$Positive_Likelihood<-percent(comp.measures$Positive_Likelihood/100,accuracy = .01)
-comp.measures
+comp.1<-comp.measures
 ```
 
-
+4. **more models, predictions and confusion matrices ** Iwanted to tes tout a variety of polynomial models so I used the poly function on my numeric variables (can't use this on factor or 0/1 variables). I also started lowering the probability level needed to be considered a "yes" and found that my sensitivity increased dramatically as my classificatio nlevel decreased. Using this method, I took my best models and tried lower classification levels until I reached an 80% cutoff level (arbitrary).
 ```{r more_models}
 bank.step.poly1<-glm(y ~ poutcome + nr.employed + month + job + contact + cons.conf.idx + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain)
 
@@ -229,8 +214,7 @@ bank.best3<-glm(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + p
 
 bank.best4<-glm(y ~ poutcome + I(nr.employed^2) + month + contact + I(cons.conf.idx^2) + pdays + default + campaign, family = binomial(link = "logit"), data = banking, subset = btrain)
 
-bank.best2<-glm(y ~ poutcome + I(nr.employed^2) + I(age^2) + month + job + contact + I(cons.conf.idx^2) + pdays + default + day_of_week + campaign + previous, family = binomial(link = "logit"), data = banking, subset = btrain, output = "Scatterplot")
-
+bank.step.poly1.meas<-confusion(bank.step.poly1,banking,-btrain,banking$y,0.5)
 bank.best1.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.5)
 bank.best2.meas<-confusion(bank.best2,banking,-btrain,banking$y,0.5)
 bank.best3.meas<-confusion(bank.best1,banking,-btrain,banking$y,0.5)
@@ -245,14 +229,14 @@ comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .0
 comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
 comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
 comp.measures$'Fewer Calls'<-round(comp.measures$'Fewer Calls',0)
-comp.measures
+comp.glm<-comp.measures
+comp.glm
 
 anova(bank.step.poly1,bank.best1,bank.best3,bank.best4,bank.best2)
 
 ```
 
-6. **Try an LDA**
-
+6. **LDA Modeling** The last type of modeling I wanted to use was linear discriminant modeling. I found that this type of model gave me slightly better predictive accuracy than the glm models.
 ```{r}
 bank.best3<-glm(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + campaign, family = binomial(link = "logit"), data = banking, subset = btrain)
 
@@ -262,64 +246,50 @@ bank.lda.full<-lda(y ~ .-duration, data = banking, subset = btrain)
 
 
 bank.lda.pred<-predict(bank.lda,banking[-btrain,])
+bank.lda.prob<-ifelse(bank.lda.pred$posterior[,2]>0.5, 1, 0)
 bank.lda.tab<-table(bank.lda.pred$class,banking$y[-btrain])
 bank.lda.tab
-bank.lda.meas<-c("Error Rate"=100*round((bank.lda.tab[1,2]+bank.lda.tab[2,1])/(bank.lda.tab[1,1]+bank.lda.tab[1,2]+bank.lda.tab[2,1]+bank.lda.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.tab[2,2])/(bank.lda.tab[1,2]+bank.lda.tab[2,2]),4),"Specificity"=100*round((bank.lda.tab[1,1])/(bank.lda.tab[1,1]+bank.lda.tab[2,1]),4))
+bank.lda.meas<-c("Error Rate"=100*round((bank.lda.tab[1,2]+bank.lda.tab[2,1])/(bank.lda.tab[1,1]+bank.lda.tab[1,2]+bank.lda.tab[2,1]+bank.lda.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.tab[2,2])/(bank.lda.tab[1,2]+bank.lda.tab[2,2]),4),"Specificity"=100*round((bank.lda.tab[1,1])/(bank.lda.tab[1,1]+bank.lda.tab[2,1]),4), "Fewer Calls" = round(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(bank.lda.prob==1)))
 bank.lda.meas
 
-confusion(bank.lda.pred,banking,bank.lda.pred,)
 
 bank.lda.class.40 = ifelse(bank.lda.pred$posterior[,2]>0.4, 1, 0)
-bank.lda.40.tab<-table(bank.lda.pred$class,banking$y[-btrain])
+bank.lda.40.tab<-table(bank.lda.class.40,banking$y[-btrain])
 bank.lda.40.tab
-bank.lda.40.meas<-c("Error Rate"=100*round((bank.lda.40.tab[1,2]+bank.lda.40.tab[2,1])/(bank.lda.40.tab[1,1]+bank.lda.40.tab[1,2]+bank.lda.40.tab[2,1]+bank.lda.40.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.40.tab[2,2])/(bank.lda.40.tab[1,2]+bank.lda.40.tab[2,2]),4),"Specificity"=100*round((bank.lda.40.tab[1,1])/(bank.lda.40.tab[1,1]+bank.lda.40.tab[2,1]),4))
+bank.lda.40.meas<-c("Error Rate"=100*round((bank.lda.40.tab[1,2]+bank.lda.40.tab[2,1])/(bank.lda.40.tab[1,1]+bank.lda.40.tab[1,2]+bank.lda.40.tab[2,1]+bank.lda.40.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.40.tab[2,2])/(bank.lda.40.tab[1,2]+bank.lda.40.tab[2,2]),4),"Specificity"=100*round((bank.lda.40.tab[1,1])/(bank.lda.40.tab[1,1]+bank.lda.40.tab[2,1]),4), "Fewer Calls" = round(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(bank.lda.class.40==1)))
 bank.lda.40.meas
 
-bank.lda.class.950 = ifelse(bank.lda.pred$posterior[,2]>0.3, 1, 0)
-bank.lda.950.tab<-table(bank.lda.pred$class,banking$y[-btrain])
+bank.lda.class.250 = ifelse(bank.lda.pred$posterior[,2]>0.25, 1, 0)
+bank.lda.250.tab<-table(bank.lda.class.250,banking$y[-btrain])
+bank.lda.250.tab
+bank.lda.250.meas<-c("Error Rate"=100*round((bank.lda.250.tab[1,2]+bank.lda.250.tab[2,1])/(bank.lda.250.tab[1,1]+bank.lda.250.tab[1,2]+bank.lda.250.tab[2,1]+bank.lda.250.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.250.tab[2,2])/(bank.lda.250.tab[1,2]+bank.lda.250.tab[2,2]),4),"Specificity"=100*round((bank.lda.250.tab[1,1])/(bank.lda.250.tab[1,1]+bank.lda.250.tab[2,1]),4), "Fewer Calls" = round(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(bank.lda.class.250==1)))
+bank.lda.250.meas
+
+bank.lda.class.950 = ifelse(bank.lda.pred$posterior[,2]>0.0232, 1, 0)
+bank.lda.950.tab<-table(bank.lda.class.950,banking$y[-btrain])
 bank.lda.950.tab
-bank.lda.950.meas<-c("Error Rate"=100*round((bank.lda.950.tab[1,2]+bank.lda.950.tab[2,1])/(bank.lda.950.tab[1,1]+bank.lda.950.tab[1,2]+bank.lda.950.tab[2,1]+bank.lda.950.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.950.tab[2,2])/(bank.lda.950.tab[1,2]+bank.lda.950.tab[2,2]),4),"Specificity"=100*round((bank.lda.950.tab[1,1])/(bank.lda.950.tab[1,1]+bank.lda.950.tab[2,1]),4))
+bank.lda.950.meas<-c("Error Rate"=100*round((bank.lda.950.tab[1,2]+bank.lda.950.tab[2,1])/(bank.lda.950.tab[1,1]+bank.lda.950.tab[1,2]+bank.lda.950.tab[2,1]+bank.lda.950.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.950.tab[2,2])/(bank.lda.950.tab[1,2]+bank.lda.950.tab[2,2]),4),"Specificity"=100*round((bank.lda.950.tab[1,1])/(bank.lda.950.tab[1,1]+bank.lda.950.tab[2,1]),4), "Fewer Calls" = round(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(bank.lda.class.950==1)))
 bank.lda.950.meas
 
 bank.lda.full.pred<-predict(bank.lda.full,banking[-btrain,])
+bank.lda..full.prob = ifelse(bank.lda.full.pred$posterior[,2]>0.5, 1, 0)
 bank.lda.full.tab<-table(bank.lda.full.pred$class,banking$y[-btrain])
 bank.lda.full.tab
-bank.lda.full.meas<-c("Error Rate"=100*round((bank.lda.full.tab[1,2]+bank.lda.full.tab[2,1])/(bank.lda.full.tab[1,1]+bank.lda.full.tab[1,2]+bank.lda.full.tab[2,1]+bank.lda.full.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.full.tab[2,2])/(bank.lda.full.tab[1,2]+bank.lda.full.tab[2,2]),4),"Specificity"=100*round((bank.lda.full.tab[1,1])/(bank.lda.full.tab[1,1]+bank.lda.full.tab[2,1]),4))
+bank.lda.full.meas<-c("Error Rate"=100*round((bank.lda.full.tab[1,2]+bank.lda.full.tab[2,1])/(bank.lda.full.tab[1,1]+bank.lda.full.tab[1,2]+bank.lda.full.tab[2,1]+bank.lda.full.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.full.tab[2,2])/(bank.lda.full.tab[1,2]+bank.lda.full.tab[2,2]),4),"Specificity"=100*round((bank.lda.full.tab[1,1])/(bank.lda.full.tab[1,1]+bank.lda.full.tab[2,1]),4), "Fewer Calls" = round(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(bank.lda.class.40==1)))
 bank.lda.full.meas
 
-comp.measures<-as.data.frame(rbind(bank.best3.meas,bank.lda.meas,bank.lda.950.meas,bank.lda.40.meas,bank.lda.full.meas))
-comp.measures$Positive_Likelihood<-round(comp.measures[,2]/(100-comp.measures[,3]),2)
+bank.lda.full.1.prob = ifelse(bank.lda.full.pred$posterior[,2]>0.0225, 1, 0)
+bank.lda.full.1.tab<-table(bank.lda.full.1.prob,banking$y[-btrain])
+bank.lda.full.1.tab
+bank.lda.full.1.meas<-c("Error Rate"=100*round((bank.lda.full.1.tab[1,2]+bank.lda.full.1.tab[2,1])/(bank.lda.full.1.tab[1,1]+bank.lda.full.1.tab[1,2]+bank.lda.full.1.tab[2,1]+bank.lda.full.1.tab[2,2]),4),"Sensitivity"=100*round((bank.lda.full.1.tab[2,2])/(bank.lda.full.1.tab[1,2]+bank.lda.full.1.tab[2,2]),4),"Specificity"=100*round((bank.lda.full.1.tab[1,1])/(bank.lda.full.1.tab[1,1]+bank.lda.full.1.tab[2,1]),4), "Fewer Calls" = round(sum(banking$y[-btrain]==1)+sum(banking$y[-btrain]==0)-sum(bank.lda.class.40==1)))
+bank.lda.full.1.meas
+
+comp.measures<-as.data.frame(rbind(bank.best3.meas,bank.lda.meas,bank.lda.950.meas,bank.lda.250.meas,bank.lda.40.meas,bank.lda.full.meas,bank.lda.full.1.meas))
 comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
 comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
 comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
-comp.measures$Positive_Likelihood<-percent(comp.measures$Positive_Likelihood/100,accuracy = .01)
-comp.measures
-
-plot(bank.lda, panel = panel.lda,, cex = 0.7, dimen = 8, abbrev = FALSE, xlab = "LD1", ylab = "LD2")
-plot(bank.lda.full, panel = panel.lda,, cex = 0.7, dimen = 8, abbrev = FALSE, xlab = "LD1", ylab = "LD2")
-
-
+comp.lda<-comp.measures
+comp.lda
+comp.all<-rbind(comp.1,comp.glm,comp.lda)
 
 ```
-
-7. **Classification Tree** I attempted to run classification trees but had difficulty getting the data to return
-
-```{r}
-banking_tree<-banking
-banking_tree$y<-as.factor(as.character(banking$y)=="1")
-
-bank.tree<-tree(y ~ .-duration, data = banking, subset = btrain)
-plot(bank.tree)
-text(bank.tree,pretty = 0)
-bank.tree.class=predict(bank.tree, banking[-btrain,])
-#bank.tree.class
-
-bank.tree.class.4 = ifelse(bank.tree.class>0.5, 1, 0)
-bank.tree.tab<-table(bank.tree.class.4,banking$y[-btrain])
-
-bank.tree2<-tree(y ~ poutcome + nr.employed + month + contact + cons.conf.idx + pdays + default + campaign, data = banking_tree, subset = btrain)
-plot(bank.tree2)
-text(bank.tree2,pretty = 0)
-
-```
-
