@@ -149,7 +149,7 @@ data_dummies <- removeConstantFeatures(data_dummies, perc=0.0001) #99% the same 
 
 4. **Set up correlation table**
 
-```{r}
+```{r, eval=F}
 VAR_LIST <- names(df)[ - which(names(df) == "RESP")]
 
 #Set-up df
@@ -177,9 +177,6 @@ kable(list, caption = "Pearson Correlation Coefficients w/RESP ")
 5. **Test a few GLM models**
 
 ```{r}
-set.seed(2)
-dd.train<-sample(1:nrow(data_dummies), 0.70*nrow(data_dummies)) 
-
 #Formula to quickly create confusion matrices
 confusion<-function(model,dataset,subset,indvar,prediction_point) {
   model.pred<-predict(model,dataset,type = 'response')[subset]
@@ -188,31 +185,56 @@ confusion<-function(model,dataset,subset,indvar,prediction_point) {
   if (nrow(model.tab)<2) {
     model.tab<-as.table(rbind(model.tab,c(0,0)))
   }
-  model.meas<-c('Error Rate'= 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4),'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4),'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4))
+  model.meas<-c('Error Rate' = 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4), 'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4), 'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Emails Dropped" = (sum(indvar[subset]==1)+sum(indvar[subset]==0)-sum(model.prob==1)))
   model.meas<-model.meas
   model.meas
 }
 
+#Formula to quickly create confusion matrices for lda models
+confusion_lda<-function(model,dataset,subset,data_indvar,prediction_point) {
+  model.pred<-predict(model,dataset[subset,])
+  if (is.na(prediction_point)) {
+    model.tab<-table(model.pred$class,data_indvar[subset])
+  } else {
+    model.prob<-ifelse(model.pred$posterior[,2]>prediction_point,1,0)
+    model.tab<-table(model.prob,data_indvar[subset])
+  }
+  if (nrow(model.tab)<2) {
+    model.tab<-as.table(rbind(model.tab,c(0,0)))
+  }
+  model.meas<-c('Error Rate' = 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4), 'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4), 'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Emails Dropped" = (sum(data_indvar[subset]==1)+sum(data_indvar[subset]==0)-sum(model.prob==1)))
+  model.meas<-model.meas
+  model.meas
+}
+#lda.meas<-confusion_lda(fit.lda3,data_dummies,-dd.train,RESP,.4)
+
+
+```
+
+```{r}
+set.seed(2)
+dd.train<-sample(1:nrow(data_dummies), 0.70*nrow(data_dummies)) 
 
 fit.1 <- glm(RESP ~ ., data=data_dummies,family=binomial(link="logit"))
 fit.0<-glm(RESP~days_since_last_activity, data=data_dummies,family=binomial(link="logit"))
 #fit.step.2<- step(fit.0, scope=list(lower=fit.0, upper=fit.1), direction="both", test="F")#I tried a stepwise model once I had all the variables input correctly
 #summary(fit.step.2)
-fit.1.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.5)
-fit.1_2.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.3)
-fit.1_3.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.25)
-fit.1_4.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.22)
-fit.1_5.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.21)
-fit.1_6.meas<-confusion(fit.1,data_dummies,-dd.train,RESP,.2)
-fit.0.meas<-confusion(fit.0,data_dummies,-dd.train,RESP,.5)
-fit.0_1.meas<-confusion(fit.0,data_dummies,-dd.train,RESP,.21)
+
+fit.1.meas<-confusion(fit.1,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.1_2.meas<-confusion(fit.1,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.1_3.meas<-confusion(fit.1,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.1_4.meas<-confusion(fit.1,data_dummies,-dd.train,data_dummies$RESP,.22)
+fit.1_5.meas<-confusion(fit.1,data_dummies,-dd.train,data_dummies$RESP,.21)
+fit.1_6.meas<-confusion(fit.1,data_dummies,-dd.train,data_dummies$RESP,.2)
+fit.0.meas<-confusion(fit.0,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.0_1.meas<-confusion(fit.0,data_dummies,-dd.train,data_dummies$RESP,.21)
 
 comp.measures<-as.data.frame(rbind(fit.1.meas,fit.1_2.meas,fit.1_3.meas,fit.1_4.meas,fit.1_5.meas,fit.1_6.meas))
 
 
 
 fit.step.1<-glm(formula = RESP ~ days_since_last_activity + Upmarket + V162 + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State_WY + State_NE + State_CO + V86_Y + State_MS + V61.dummy + V86_G + State_UT + State_RI + State_MN + State_CA + State_NV + V161_H3 + V161_A4  + V161_B4 + State_WA + V161_T3 + State_MO + State_ND + V86_A + State_PA + V85_S + V86_Z + State_VT + State_OH + State_TX + State_MT + State_NJ + V161_A3, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
-fit.step.1.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.5)
+fit.step.1.meas<-confusion(fit.step.1,data_dummies,-dd.train,data_dummies$RESP,.5)
 
 
 fit.step.2<-glm(formula = RESP ~ poly(days_since_last_activity,3) + Upmarket + poly(V162,4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State_WY + State_NE + State_CO + V86_Y + State_MS + V61.dummy + V86_G + State_UT + State_RI + State_MN + State_CA + State_NV + V161_H3 + V161_A4  + V161_B4 + State_WA + V161_T3 + State_MO + State_ND + V86_A + State_PA + V85_S + V86_Z + State_VT + State_OH + State_TX + State_MT + State_NJ + V161_A3, family = binomial(link = "logit"), data = data_dummies,subset = dd.train)
@@ -265,50 +287,50 @@ anova(fit.sim.1, fit.sim.2, fit.sim.3, fit.step.1, fit.step.2, fit.step.poly, fi
 
 
 ```{r}
-fit.step.1.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.5)
-fit.step.2.meas<-confusion(fit.step.2,data_dummies,-dd.train,RESP,.5)
-fit.step.poly.meas<-confusion(fit.step.poly,data_dummies,-dd.train,RESP,.5)
-fit.step.poly4.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,RESP,.5)
-fit.step.poly4.1.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,RESP,.5)
-fit.step.poly2.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,RESP,.5)
-fit.step.poly2.1.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,RESP,.5)
-fit.step.poly3.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,RESP,.5)
-fit.step.poly3.1.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,RESP,.5)
-fit.step.poly5i.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,RESP,.5)
-fit.sim.1.meas<-confusion(fit.sim.1,data_dummies,-dd.train,RESP,.5)
-fit.sim.2.meas<-confusion(fit.sim.2,data_dummies,-dd.train,RESP,.5)
-fit.sim.3.meas<-confusion(fit.sim.3,data_dummies,-dd.train,RESP,.5)
+fit.step.1.meas<-confusion(fit.step.1,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.2.meas<-confusion(fit.step.2,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly.meas<-confusion(fit.step.poly,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly4.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly4.1.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly2.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly2.1.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly3.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly3.1.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.step.poly5i.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.sim.1.meas<-confusion(fit.sim.1,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.sim.2.meas<-confusion(fit.sim.2,data_dummies,-dd.train,data_dummies$RESP,.5)
+fit.sim.3.meas<-confusion(fit.sim.3,data_dummies,-dd.train,data_dummies$RESP,.5)
 
 #30% probablity
-fit.step.1_1.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.3)
-fit.step.2_1.meas<-confusion(fit.step.2,data_dummies,-dd.train,RESP,.3)
-fit.step.poly_1.meas<-confusion(fit.step.poly,data_dummies,-dd.train,RESP,.3)
-fit.step.poly4_1.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,RESP,.3)
-fit.step.poly4.1_1.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,RESP,.3)
-fit.step.poly2_1.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,RESP,.3)
-fit.step.poly2.1_1.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,RESP,.3)
-fit.step.poly3_1.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,RESP,.3)
-fit.step.poly3.1_1.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,RESP,.3)
-fit.step.poly5i_1.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,RESP,.3)
-fit.sim.1_1.meas<-confusion(fit.sim.1,data_dummies,-dd.train,RESP,.3)
-fit.sim.2_1.meas<-confusion(fit.sim.2,data_dummies,-dd.train,RESP,.3)
-fit.sim.3_1.meas<-confusion(fit.sim.3,data_dummies,-dd.train,RESP,.3)
+fit.step.1_1.meas<-confusion(fit.step.1,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.2_1.meas<-confusion(fit.step.2,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly_1.meas<-confusion(fit.step.poly,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly4_1.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly4.1_1.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly2_1.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly2.1_1.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly3_1.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly3.1_1.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.step.poly5i_1.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.sim.1_1.meas<-confusion(fit.sim.1,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.sim.2_1.meas<-confusion(fit.sim.2,data_dummies,-dd.train,data_dummies$RESP,.3)
+fit.sim.3_1.meas<-confusion(fit.sim.3,data_dummies,-dd.train,data_dummies$RESP,.3)
 
 
 #25% Probability
-fit.step.1_2.meas<-confusion(fit.step.1,data_dummies,-dd.train,RESP,.25)
-fit.step.2_2.meas<-confusion(fit.step.2,data_dummies,-dd.train,RESP,.25)
-fit.step.poly_2.meas<-confusion(fit.step.poly,data_dummies,-dd.train,RESP,.25)
-fit.step.poly4_2.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,RESP,.25)
-fit.step.poly4.1_2.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,RESP,.25)
-fit.step.poly2_2.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,RESP,.25)
-fit.step.poly2.1_2.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,RESP,.25)
-fit.step.poly3_2.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,RESP,.25)
-fit.step.poly3.1_2.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,RESP,.25)
-fit.step.poly5i_2.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,RESP,.25)
-fit.sim.1_2.meas<-confusion(fit.sim.1,data_dummies,-dd.train,RESP,.25)
-fit.sim.2_2.meas<-confusion(fit.sim.2,data_dummies,-dd.train,RESP,.25)
-fit.sim.3_2.meas<-confusion(fit.sim.3,data_dummies,-dd.train,RESP,.25)
+fit.step.1_2.meas<-confusion(fit.step.1,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.2_2.meas<-confusion(fit.step.2,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly_2.meas<-confusion(fit.step.poly,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly4_2.meas<-confusion(fit.step.poly4,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly4.1_2.meas<-confusion(fit.step.poly4.1,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly2_2.meas<-confusion(fit.step.poly2,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly2.1_2.meas<-confusion(fit.step.poly2.1,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly3_2.meas<-confusion(fit.step.poly3,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly3.1_2.meas<-confusion(fit.step.poly3.1,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.step.poly5i_2.meas<-confusion(fit.step.poly5i,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.sim.1_2.meas<-confusion(fit.sim.1,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.sim.2_2.meas<-confusion(fit.sim.2,data_dummies,-dd.train,data_dummies$RESP,.25)
+fit.sim.3_2.meas<-confusion(fit.sim.3,data_dummies,-dd.train,data_dummies$RESP,.25)
 
 
 comp.measures<-as.data.frame(rbind(fit.sim.1.meas, fit.sim.1_1.meas, fit.sim.1_2.meas, fit.sim.2.meas, fit.sim.2_1.meas, fit.sim.2_2.meas, fit.sim.3.meas, fit.sim.3_1.meas, fit.sim.3_2.meas, fit.step.1.meas, fit.step.1_1.meas, fit.step.1_2.meas, fit.step.2.meas, fit.step.2_1.meas, fit.step.2_2.meas, fit.step.poly.meas, fit.step.poly_1.meas, fit.step.poly_2.meas, fit.step.poly2.1.meas, fit.step.poly2.1_1.meas, fit.step.poly2.1_2.meas, fit.step.poly2.meas, fit.step.poly2_1.meas, fit.step.poly2_2.meas, fit.step.poly3.1.meas, fit.step.poly3.1_1.meas, fit.step.poly3.1_2.meas, fit.step.poly3.meas, fit.step.poly3_1.meas, fit.step.poly3_2.meas, fit.step.poly4.1.meas, fit.step.poly4.1_1.meas, fit.step.poly4.1_2.meas, fit.step.poly4.meas, fit.step.poly4_1.meas, fit.step.poly4_2.meas, fit.step.poly5i.meas, fit.step.poly5i_1.meas, fit.step.poly5i_2.meas))
@@ -325,124 +347,77 @@ write.csv(comp.measures,file="comp_measures.csv")
 
 ```{r}
 library(MASS)
-confusion_lda<-function(model,dataset,subset,indvar,prediction_point) {
-  model.pred<-predict(model,dataset[subset])
-  model.prob<-ifelse(model.pred$posterior[,2]>prediction_point,1,0)
-  model.tab<-table(model.prob,indvar[subset])
-  if (nrow(model.tab)<2) {
-    model.tab<-as.table(rbind(model.tab,c(0,0)))
-  }
-  model.meas<-c('Error Rate'= 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4),'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4),'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Fewer Calls" = (sum(indvar[subset]==1)+sum(indvar[subset]==0)-sum(model.prob==1)))
-  model.meas<-model.meas
-  model.meas
-}
+#lda.meas<-confusion_lda(fit.lda3,data_dummies,-dd.train,RESP,.4)
+
 
 fit.lda1<-lda(RESP ~ days_since_last_activity + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL+ State_CO + V124 + V276 + MATCH + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z, data = data_dummies,subset = dd.train)
-prob.lda1<-predict(fit.lda1,data_dummies[-dd.train,])
-tab.lda1<-table(prob.lda1$class,data_dummies$RESP[-dd.train])
-tab.lda1
-meas.lda1<-c("Error Rate"=100*round((tab.lda1[1,2]+tab.lda1[2,1])/(tab.lda1[1,1]+tab.lda1[1,2]+tab.lda1[2,1]+tab.lda1[2,2]),4),"Sensitivity"=100*round((tab.lda1[2,2])/(tab.lda1[1,2]+tab.lda1[2,2]),4),"Specificity"=100*round((tab.lda1[1,1])/(tab.lda1[1,1]+tab.lda1[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda1$class==1)))
+#prob.lda1<-predict(fit.lda1,data_dummies[-dd.train,])
+#tab.lda1<-table(prob.lda1$class,data_dummies$RESP[-dd.train])
+#tab.lda1
+#meas.lda1<-c("Error Rate"=100*round((tab.lda1[1,2]+tab.lda1[2,1])/(tab.lda1[1,1]+tab.lda1[1,2]+tab.lda1[2,1]+tab.lda1[2,2]),4),"Sensitivity"=100*round((tab.lda1[2,2])/(tab.lda1[1,2]+tab.lda1[2,2]),4),"Specificity"=100*round((tab.lda1[1,1])/(tab.lda1[1,1]+tab.lda1[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda1$class==1)))
+#meas.lda1
+meas.lda1<-confusion_lda(fit.lda1,data_dummies,-dd.train,data_dummies$RESP,.5)
 meas.lda1
 
-
 fit.lda2<-lda(RESP ~ ., data = data_dummies,subset = dd.train)
-prob.lda2<-predict(fit.lda2,data_dummies[-dd.train,])
-tab.lda2<-table(prob.lda2$class,data_dummies$RESP[-dd.train])
-tab.lda2
-meas.lda2<-c("Error Rate"=100*round((tab.lda2[1,2]+tab.lda2[2,1])/(tab.lda2[1,1]+tab.lda2[1,2]+tab.lda2[2,1]+tab.lda2[2,2]),4),"Sensitivity"=100*round((tab.lda2[2,2])/(tab.lda2[1,2]+tab.lda2[2,2]),4),"Specificity"=100*round((tab.lda2[1,1])/(tab.lda2[1,1]+tab.lda2[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda2$class==1)))
+meas.lda2<-confusion_lda(fit.lda2,data_dummies,-dd.train,data_dummies$RESP,.5)
 meas.lda2
 
 fit.lda3<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167, data = data_dummies,subset = dd.train)
-prob.lda3<-predict(fit.lda3,data_dummies[-dd.train,])
-tab.lda3<-table(prob.lda3$class,data_dummies$RESP[-dd.train])
-tab.lda3
-meas.lda3<-c("Error Rate"=100*round((tab.lda3[1,2]+tab.lda3[2,1])/(tab.lda3[1,1]+tab.lda3[1,2]+tab.lda3[2,1]+tab.lda3[2,2]),4),"Sensitivity"=100*round((tab.lda3[2,2])/(tab.lda3[1,2]+tab.lda3[2,2]),4),"Specificity"=100*round((tab.lda3[1,1])/(tab.lda3[1,1]+tab.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda3$class==1)))
+meas.lda3<-confusion_lda(fit.lda3,data_dummies,-dd.train,data_dummies$RESP,.5)
 meas.lda3
 
-class3.lda3 = ifelse(prob.lda3$posterior[,2]>0.3, 1, 0)
-tab3.lda3<-table(class3.lda3,data_dummies$RESP[-dd.train])
-meas3.lda3<-c("Error Rate"=100*round((tab3.lda3[1,2]+tab3.lda3[2,1])/(tab3.lda3[1,1]+tab3.lda3[1,2]+tab3.lda3[2,1]+tab3.lda3[2,2]),4),"Sensitivity"=100*round((tab3.lda3[2,2])/(tab3.lda3[1,2]+tab3.lda3[2,2]),4),"Specificity"=100*round((tab3.lda3[1,1])/(tab3.lda3[1,1]+tab3.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class3.lda3==1)))
+meas3.lda3<-confusion_lda(fit.lda3,data_dummies,-dd.train,data_dummies$RESP,.3)
 meas3.lda3
 
-
-class25.lda3 = ifelse(prob.lda3$posterior[,2]>0.04, 1, 0)
-tab25.lda3<-table(class25.lda3,data_dummies$RESP[-dd.train])
-meas25.lda3<-c("Error Rate"=100*round((tab25.lda3[1,2]+tab25.lda3[2,1])/(tab25.lda3[1,1]+tab25.lda3[1,2]+tab25.lda3[2,1]+tab25.lda3[2,2]),4),"Sensitivity"=100*round((tab25.lda3[2,2])/(tab25.lda3[1,2]+tab25.lda3[2,2]),4),"Specificity"=100*round((tab25.lda3[1,1])/(tab25.lda3[1,1]+tab25.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class25.lda3==1)))
-meas25.lda3
-
-class20.lda3 = ifelse(prob.lda3$posterior[,2]>0.2, 1, 0)
-tab20.lda3<-table(class20.lda3,data_dummies$RESP[-dd.train])
-meas20.lda3<-c("Error Rate"=100*round((tab20.lda3[1,2]+tab20.lda3[2,1])/(tab20.lda3[1,1]+tab20.lda3[1,2]+tab20.lda3[2,1]+tab20.lda3[2,2]),4),"Sensitivity"=100*round((tab20.lda3[2,2])/(tab20.lda3[1,2]+tab20.lda3[2,2]),4),"Specificity"=100*round((tab20.lda3[1,1])/(tab20.lda3[1,1]+tab20.lda3[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class20.lda3==1)))
+meas20.lda3<-confusion_lda(fit.lda3,data_dummies,-dd.train,data_dummies$RESP,.2)
 meas20.lda3
 
+meas25.lda3<-confusion_lda(fit.lda3,data_dummies,-dd.train,data_dummies$RESP,.04)
+meas25.lda3
+
 fit.lda5<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data_dummies,subset = dd.train)
-prob.lda5<-predict(fit.lda5,data_dummies[-dd.train,])
-tab.lda5<-table(prob.lda5$class,data_dummies$RESP[-dd.train])
-tab.lda5
-meas.lda5<-c("Error Rate"=100*round((tab.lda5[1,2]+tab.lda5[2,1])/(tab.lda5[1,1]+tab.lda5[1,2]+tab.lda5[2,1]+tab.lda5[2,2]),4),"Sensitivity"=100*round((tab.lda5[2,2])/(tab.lda5[1,2]+tab.lda5[2,2]),4),"Specificity"=100*round((tab.lda5[1,1])/(tab.lda5[1,1]+tab.lda5[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda5$class==1)))
+meas.lda5<-confusion_lda(fit.lda5,data_dummies,-dd.train,data_dummies$RESP,.5)
 meas.lda5
 
-class3.lda5 = ifelse(prob.lda5$posterior[,2]>0.3, 1, 0)
-tab3.lda5<-table(class3.lda5,data_dummies$RESP[-dd.train])
-meas3.lda5<-c("Error Rate"=100*round((tab3.lda5[1,2]+tab3.lda5[2,1])/(tab3.lda5[1,1]+tab3.lda5[1,2]+tab3.lda5[2,1]+tab3.lda5[2,2]),4),"Sensitivity"=100*round((tab3.lda5[2,2])/(tab3.lda5[1,2]+tab3.lda5[2,2]),4),"Specificity"=100*round((tab3.lda5[1,1])/(tab3.lda5[1,1]+tab3.lda5[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class3.lda5==1)))
+meas3.lda5<-confusion_lda(fit.lda5,data_dummies,-dd.train,data_dummies$RESP,.3)
 meas3.lda5
 
-class04.lda5 = ifelse(prob.lda5$posterior[,2]>0.04, 1, 0)
-tab04.lda5<-table(class04.lda5,data_dummies$RESP[-dd.train])
-meas04.lda5<-c("Error Rate"=100*round((tab04.lda5[1,2]+tab04.lda5[2,1])/(tab04.lda5[1,1]+tab04.lda5[1,2]+tab04.lda5[2,1]+tab04.lda5[2,2]),4),"Sensitivity"=100*round((tab04.lda5[2,2])/(tab04.lda5[1,2]+tab04.lda5[2,2]),4),"Specificity"=100*round((tab04.lda5[1,1])/(tab04.lda5[1,1]+tab04.lda5[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class04.lda5==1)))
+meas04.lda5<-confusion_lda(fit.lda5,data_dummies,-dd.train,data_dummies$RESP,.04)
 meas04.lda5
 
 #####We have a winner
-class02.lda5 = ifelse(prob.lda5$posterior[,2]>0.022, 1, 0)
-tab.best.lda<-table(class02.lda5,data_dummies$RESP[-dd.train])
-meas02.lda5<-c("Error Rate"=100*round((tab.best.lda[1,2]+tab.best.lda[2,1])/(tab.best.lda[1,1]+tab.best.lda[1,2]+tab.best.lda[2,1]+tab.best.lda[2,2]),4),"Sensitivity"=100*round((tab.best.lda[2,2])/(tab.best.lda[1,2]+tab.best.lda[2,2]),4),"Specificity"=100*round((tab.best.lda[1,1])/(tab.best.lda[1,1]+tab.best.lda[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(class02.lda5==1)))
+meas02.lda5<-confusion_lda(fit.lda5,data_dummies,-dd.train,data_dummies$RESP,.022)
 meas02.lda5
 
-
 fit.lda4<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z, data = data_dummies,subset = dd.train)
-prob.lda4<-predict(fit.lda4,data_dummies[-dd.train,])
-tab.lda4<-table(prob.lda4$class,data_dummies$RESP[-dd.train])
-tab.lda4
-meas.lda4<-c("Error Rate"=100*round((tab.lda4[1,2]+tab.lda4[2,1])/(tab.lda4[1,1]+tab.lda4[1,2]+tab.lda4[2,1]+tab.lda4[2,2]),4),"Sensitivity"=100*round((tab.lda4[2,2])/(tab.lda4[1,2]+tab.lda4[2,2]),4),"Specificity"=100*round((tab.lda4[1,1])/(tab.lda4[1,1]+tab.lda4[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(prob.lda4$class==1)))
+meas.lda4<-confusion_lda(fit.lda4,data_dummies,-dd.train,data_dummies$RESP,.5)
 meas.lda4
 
 fit.best.lda<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data_dummies,subset = dd.train)
-prob.best.lda<-predict(fit.best.lda,data_dummies[-dd.train,])
-
-best.lda.022 = ifelse(prob.best.lda$posterior[,2]>0.022, 1, 0)
-tab.best.lda<-table(best.lda.022,data_dummies$RESP[-dd.train])
-meas.best.lda<-c("Error Rate"=100*round((tab.best.lda[1,2]+tab.best.lda[2,1])/(tab.best.lda[1,1]+tab.best.lda[1,2]+tab.best.lda[2,1]+tab.best.lda[2,2]),4),"Sensitivity"=100*round((tab.best.lda[2,2])/(tab.best.lda[1,2]+tab.best.lda[2,2]),4),"Specificity"=100*round((tab.best.lda[1,1])/(tab.best.lda[1,1]+tab.best.lda[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(best.lda.022==1)))
+meas.best.lda<-confusion_lda(fit.best.lda,data_dummies,-dd.train,data_dummies$RESP,.022)
 meas.best.lda
 
 fit.best.lda2<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + V276*days_since_last_activity + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data_dummies,subset = dd.train)
-prob.best.lda2<-predict(fit.best.lda2,data_dummies[-dd.train,])
-
-best.lda.005 = ifelse(prob.best.lda2$posterior[,2]>0.0205, 1, 0)
-tab.best.lda.005<-table(best.lda.005,data_dummies$RESP[-dd.train])
-meas.best.lda.005<-c("Error Rate"=100*round((tab.best.lda.005[1,2]+tab.best.lda.005[2,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[1,2]+tab.best.lda.005[2,1]+tab.best.lda.005[2,2]),4),"Sensitivity"=100*round((tab.best.lda.005[2,2])/(tab.best.lda.005[1,2]+tab.best.lda.005[2,2]),4),"Specificity"=100*round((tab.best.lda.005[1,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[2,1]),4),"Emails Dropped"=(sum(data_dummies$RESP[-dd.train]==1)+sum(data_dummies$RESP[-dd.train]==0)-sum(best.lda.005==1)))
-meas.best.lda.005
-
+meas.best.lda2<-confusion_lda(fit.best.lda2,data_dummies,-dd.train,data_dummies$RESP,.0205)
 
 ```
 
 7. **What do these classes mean?**
 
 ```{r}
-comp.measures<-as.data.frame(rbind(meas.lda1, meas.lda2, meas.lda3, meas.lda4, meas.lda5, meas02.lda5, meas04.lda5, meas20.lda3, meas25.lda3, meas3.lda3, meas3.lda5,meas.best.lda,meas.best.lda.005))
+comp.measures<-as.data.frame(rbind(meas.lda1, meas.lda2, meas.lda3, meas.lda4, meas.lda5, meas02.lda5, meas04.lda5, meas20.lda3, meas25.lda3, meas3.lda3, meas3.lda5,meas.best.lda,meas.best.lda2))
 #comp.measures$Negative_Likelihood<-round((1-comp.measures[,2])/comp.measures[,3],2)
 comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
 comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
 comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
 #comp.measures$Negative_Likelihood<-percent(comp.measures$Negative_Likelihood/100,accuracy = .01)
 comp.measures
-write.csv(comp.measures,file="comp_measures_LDA.csv")
-
-
 ```
 
 8. **Tree time**
 
-```{r}
+```{r, eval=F}
 data_dummies.factor<-data_dummies
 data_dummies.factor$RESP<-as.factor(data_dummies.factor$RESP)
 tree.1<-tree(RESP~.,data = data_dummies.factor,subset = dd.train)
@@ -508,32 +483,95 @@ data.dim.dum <- data.dim.dum[ , list_to_keep]
 data.dim.dum <- removeConstantFeatures(data.dim.dum, perc=0.0001)
 attach(data.dim.dum)
 
+#Formula to quickly create confusion matrices
+confusion<-function(model,dataset,subset,indvar,prediction_point) {
+  model.pred<-predict(model,dataset,type = 'response')[subset]
+  model.prob<-ifelse(model.pred>prediction_point,1,0)
+  model.tab<-table(model.prob,dataset$indvar[subset])
+  if (nrow(model.tab)<2) {
+    model.tab<-as.table(rbind(model.tab,c(0,0)))
+  }
+  model.meas<-c('Error Rate' = 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4), 'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4), 'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Emails Dropped" = (sum(indvar[subset]==1)+sum(indvar[subset]==0)-sum(model.prob==1)))
+  model.meas<-model.meas
+  model.meas
+}
+
+#Formula to quickly create confusion matrices for lda models
+confusion_lda<-function(model,dataset,subset,data_indvar,prediction_point) {
+  model.pred<-predict(model,dataset[subset,])
+  if (is.na(prediction_point)) {
+    model.tab<-table(model.pred$class,data_indvar[subset])
+  } else {
+    model.prob<-ifelse(model.pred$posterior[,2]>prediction_point,1,0)
+    model.tab<-table(model.prob,data_indvar[subset])
+  }
+  if (nrow(model.tab)<2) {
+    model.tab<-as.table(rbind(model.tab,c(0,0)))
+  }
+  model.meas<-c('Error Rate' = 100*round((model.tab[1,2]+model.tab[2,1])/(model.tab[1,1]+model.tab[1,2]+model.tab[2,1]+model.tab[2,2]),4), 'Sensitivity'=100*round((model.tab[2,2])/(model.tab[1,2]+model.tab[2,2]),4), 'Specificity'=100*round((model.tab[1,1])/(model.tab[1,1]+model.tab[2,1]),4), "Emails Dropped" = (sum(data_indvar[subset]==1)+sum(data_indvar[subset]==0)-sum(model.prob==1)))
+  model.meas<-model.meas
+  model.meas
+}
+
 set.seed(132)
 dd.trn<-sample(1:nrow(data.dim.dum), 0.70*nrow(data.dim.dum)) 
 
 fit.best.lda<-lda(RESP ~ poly(days_since_last_activity,4) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data.dim.dum,subset = dd.trn)
-prob.best.lda<-predict(fit.best.lda,data.dim.dum[-dd.trn,])
 
-best.lda.022 = ifelse(prob.best.lda$posterior[,2]>0.001, 1, 0)
-tab.best.lda<-table(best.lda.022,data.dim.dum$RESP[-dd.trn])
-meas.best.lda<-c("Error Rate"=100*round((tab.best.lda[1,2]+tab.best.lda[2,1])/(tab.best.lda[1,1]+tab.best.lda[1,2]+tab.best.lda[2,1]+tab.best.lda[2,2]),4),"Sensitivity"=100*round((tab.best.lda[2,2])/(tab.best.lda[1,2]+tab.best.lda[2,2]),4),"Specificity"=100*round((tab.best.lda[1,1])/(tab.best.lda[1,1]+tab.best.lda[2,1]),4),"Emails Dropped"=(sum(data.dim.dum$RESP[-dd.trn]==1)+sum(data.dim.dum$RESP[-dd.trn]==0)-sum(best.lda.022==1)))
+meas.best.lda<-confusion_lda(fit.best.lda,data.dim.dum,-dd.trn,data.dim.dum$RESP,.001)
 meas.best.lda
 
 fit.best.lda2<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + V276*days_since_last_activity + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data.dim.dum,subset = dd.trn)
-prob.best.lda2<-predict(fit.best.lda2,data.dim.dum[-dd.trn,])
 
-best.lda.005 = ifelse(prob.best.lda2$posterior[,2]>0.000974, 1, 0)
-tab.best.lda.005<-table(best.lda.005,data.dim.dum$RESP[-dd.trn])
-meas.best.lda.005<-c("Error Rate"=100*round((tab.best.lda.005[1,2]+tab.best.lda.005[2,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[1,2]+tab.best.lda.005[2,1]+tab.best.lda.005[2,2]),4),"Sensitivity"=100*round((tab.best.lda.005[2,2])/(tab.best.lda.005[1,2]+tab.best.lda.005[2,2]),4),"Specificity"=100*round((tab.best.lda.005[1,1])/(tab.best.lda.005[1,1]+tab.best.lda.005[2,1]),4),"Emails Dropped"=(sum(data.dim.dum$RESP[-dd.trn]==1)+sum(data.dim.dum$RESP[-dd.trn]==0)-sum(best.lda.005==1)))
-meas.best.lda
-meas.best.lda.005
+meas.best.lda2<-confusion_lda(fit.best.lda2,data.dim.dum,-dd.trn,data.dim.dum$RESP,0.000974)
+meas.best.lda2
 
-comp.measures<-as.data.frame(rbind(fit.sim.1.meas,fit.sim.2.meas,fit.sim.3.meas,fit.step.1.meas,fit.step.2.meas,fit.step.poly.meas,fit.step.poly2.meas,fit.step.poly2.1.meas,fit.step.poly3.meas,fit.step.poly3.1.meas,fit.step.poly4.meas,fit.step.poly4.1.meas,fit.step.poly5i.meas,meas.lda1,meas.lda2,meas.lda3,meas.lda4))
-comp.measures$Negative_Likelihood<-round((1-comp.measures[,2])/comp.measures[,3],2)
+fit.best.lda3<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + V276*Upmarket + V276*days_since_last_activity + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data.dim.dum,subset = dd.trn)
+
+meas.best.lda3<-confusion_lda(fit.best.lda3,data.dim.dum,-dd.trn,data.dim.dum$RESP,0.000946)
+meas.best.lda3
+
+
+fit.best.lda4<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket + I(V162^4) + V86_K + V140 + V161_E1 + State_FL + V124 + V276 + V276*V167 + V276*days_since_last_activity + State.dummy + V86_Y + V86_G + V161_H3 + V161_A4 + V161_I3 + V161_S8 + V86_A + V86_Z+V167+V59, data = data.dim.dum,subset = dd.trn)
+
+meas.best.lda4<-confusion_lda(fit.best.lda4,data.dim.dum,-dd.trn,data.dim.dum$RESP,0.000967)
+meas.best.lda4
+
+fit.lda.simp<-lda(RESP ~ days_since_last_activity, data = data.dim.dum,subset = dd.trn)
+
+meas.lda.simp<-confusion_lda(fit.lda.simp,data.dim.dum,-dd.trn,data.dim.dum$RESP,0.002645)
+meas.lda.simp
+
+fit.lda.simp2<-lda(RESP ~ days_since_last_activity + Upmarket, data = data.dim.dum,subset = dd.trn)
+
+meas.lda.simp2<-confusion_lda(fit.lda.simp2,data.dim.dum,-dd.trn,data.dim.dum$RESP,0.00263)
+meas.lda.simp2
+
+fit.lda.simp3<-lda(RESP ~ poly(days_since_last_activity,6) + Upmarket, data = data.dim.dum,subset = dd.trn)
+
+meas.lda.simp3<-confusion_lda(fit.lda.simp3,data.dim.dum,-dd.trn,data.dim.dum$RESP,0.0011725)
+meas.lda.simp3
+
+data.dim.full<-data.dim.dum[-dd.trn,]
+#dd.80<-sample(1:nrow(data.dim.full), 0.80*nrow(data.dim.full)) 
+data.dim.full$random <- sample(100, size = nrow(data.dim.full), replace = TRUE)
+
+fit.base.lda<-lda(RESP ~random, data = data.dim.full)
+
+meas.base<-confusion_lda(fit.base.lda,data.dim.full,,data.dim.full$RESP,.004131)
+meas.base
+
+#meas.base<-sum(data.dim.full$RESP==1)
+
+
+comp.measures<-as.data.frame(rbind(meas.base,meas.best.lda,meas.best.lda2,meas.best.lda3,meas.best.lda4,meas.lda.simp,meas.lda.simp2,meas.lda.simp3))
 comp.measures$`Error Rate`<-percent(comp.measures$`Error Rate`/100,accuracy = .01)
 comp.measures$Sensitivity<-percent(comp.measures$Sensitivity/100,accuracy = .01)
 comp.measures$Specificity<-percent(comp.measures$Specificity/100,accuracy = .01)
-comp.measures$Negative_Likelihood<-percent(comp.measures$Negative_Likelihood/100,accuracy = .01)
 comp.measures
 
+```
+
+
+```{r}
 ```
